@@ -1,0 +1,6 @@
+duckdb
+pandas
+polars
+pyarrow
+tqdm
+sqlparse

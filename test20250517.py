@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from cs import CS
+from cellshift import CS
 from IPython import display
 import sys
 
