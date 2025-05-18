@@ -4,6 +4,7 @@ import pandas as pd
 import duckdb
 import polars as pl
 from duckdb import DuckDBPyConnection
+import sys
 
 # Define global variables for the table name generator
 _table_name_prefix = "table"
@@ -57,7 +58,7 @@ class CS:
                 print(f"Unsupported input type: {type(data)}")
                 return None
         except Exception as e:
-            print(f"An error occurred during loading: {e}")
+            print(f"An error occurred during loading: {e}", file=sys.stderr)
             return None
 
     def get_tablename(self) -> str:
@@ -78,7 +79,7 @@ class CS:
         else:
             return None
 
-    def to_csv(self, filename: str, **kwargs) -> bool:
+    def to_csv(self, filename: str, debug: bool = False, **kwargs) -> bool:
         """
         Saves the data to a CSV file using DuckDB's SQL interface.
 
@@ -94,17 +95,20 @@ class CS:
                 # Create a temporary view with the table name
                 self.cx.register(self._tablename, self.data)
                 # Use DuckDB's SQL to write to CSV
-                self.cx.execute(f"COPY (SELECT * FROM \"{self._tablename}\") TO '{filename}' (HEADER, DELIMITER ',');")
+                duckdb_sql = f"COPY (SELECT * FROM \"{self._tablename}\") TO '{filename}' (HEADER, DELIMITER ',');"
+                self.cx.execute(duckdb_sql)
+                if debug:
+                    print(duckdb_sql, file=sys.stderr)
                 self.cx.unregister(self._tablename) # clean up
                 return True
             except Exception as e:
-                print(f"Error saving to CSV using DuckDB: {e}")
+                print(f"Error saving to CSV using DuckDB: {e}", file=sys.stderr)
                 return False
         else:
-            print("No data to save to CSV.")
+            print("No data to save to CSV.", file=sys.stderr)
             return False
 
-    def to_parquet(self, filename: str, **kwargs) -> bool:
+    def to_parquet(self, filename: str, debug: bool = False, **kwargs) -> bool:
         """
         Saves the data to a Parquet file using DuckDB's SQL interface.
 
@@ -120,26 +124,30 @@ class CS:
             try:
                 # Create a temporary view
                 self.cx.register(self._tablename, self.data)
-                
+                if debug:
+                    print(f"self.cx.register('{self._tablename}', self.data)", file=sys.stderr)
                 # Construct the COPY statement.  Start with the basics.
-                sql = f"COPY (SELECT * FROM \"{self._tablename}\") TO '{filename}' (FORMAT 'PARQUET'"
-                
+                duckdb_sql = f"COPY (SELECT * FROM \"{self._tablename}\") TO '{filename}' (FORMAT 'PARQUET'"
                 # Add any additional keyword arguments to the SQL command
                 for key, value in kwargs.items():
-                    sql += f", {key.upper()}='{value}'" # convert key to uppercase
-                sql += ");" # close the sql statement
-                
+                    duckdb_sql += f", {key.upper()}='{value}'" # convert key to uppercase
+                duckdb_sql += ");" # close the sql statement
                 # Execute the SQL command
-                self.cx.execute(sql)
+                self.cx.execute(duckdb_sql)
+                if debug:
+                    print(duckdb_sql, file=sys.stderr)
                 self.cx.unregister(self._tablename)
+                if debug:
+                    print(f"self.cx.unregister('{self._tablename}')", file=sys.stderr)
                 return True
             except Exception as e:
-                print(f"Error saving to Parquet using DuckDB: {e}")
+                print(f"Error saving to Parquet using DuckDB: {e}", file=sys.stderr)
                 return False
         else:
-            print("No data to save to Parquet.")
+            print("No data to save to Parquet.", file=sys.stderr)
             return False
-    def to_json(self, filename: str, **kwargs) -> bool:
+
+    def to_json(self, filename: str, debug: bool = False, **kwargs) -> bool:
         """
         Saves the data to a JSON file using DuckDB's SQL interface.
 
@@ -155,24 +163,27 @@ class CS:
             try:
                 # Register the relation as a temporary view
                 self.cx.register(self._tablename, self.data)
-
+                if debug:
+                    print(f"self.cx.register('{self._tablename}', self.data)", file=sys.stderr)
                 # Construct the COPY statement
-                sql = f"COPY (SELECT * FROM \"{self._tablename}\") TO '{filename}' (FORMAT 'JSON'"
-
+                duckdb_sql = f"COPY (SELECT * FROM \"{self._tablename}\") TO '{filename}' (FORMAT 'JSON'"
                 # Add any additional keyword arguments to the SQL command
                 for key, value in kwargs.items():
-                    sql += f", {key.upper()} = {value}"  #  No quotes for boolean
-                sql += ");"
-
+                    duckdb_sql += f", {key.upper()} = {value}"  #  No quotes for boolean
+                duckdb_sql += ");"
                 # Execute the SQL command
-                self.cx.execute(sql)
+                self.cx.execute(duckdb_sql)
+                if debug:
+                    print(duckdb_sql, file=sys.stderr)
                 self.cx.unregister(self._tablename)
+                if debug:
+                    print(f"self.cx.unregister('{self._tablename}')", file=sys.stderr)
                 return True
             except Exception as e:
-                print(f"Error saving to JSON using DuckDB: {e}")
+                print(f"Error saving to JSON using DuckDB: {e}", file=sys.stderr)
                 return False
         else:
-            print("No data to save to JSON.")
+            print("No data to save to JSON.", file=sys.stderr)
             return False
 
     def to_duckdb(self, filename: str, table_name: Optional[str] = None, debug: bool = False ) -> bool:
@@ -187,42 +198,35 @@ class CS:
         Returns:
             True on success, False on failure.
         """
-        if debug:
-            import sys
         if self.data:
             try:
                 output_table_name = table_name if table_name else self._tablename
-
-                # 1. Attach the output database.
+                # Attach the output database.
                 self.cx.execute(f"ATTACH '{filename}' AS output_db;")
                 if debug:
                     print(f"ATTACH '{filename}' AS output_db;", file=sys.stderr)
-
-                # 2. Register the data (relation) as a view in the *main* database.
+                # Register the data (relation) as a view in the *main* database.
                 self.cx.register(self._tablename, self.data)
                 if debug:
                     print(f"self.cx.register('{self._tablename}', self.data)", file=sys.stderr)
-
-                # 3.  Use COPY FROM to copy the *entire* in-memory database.
+                # Use COPY FROM to copy the *entire* in-memory database.
                 self.cx.execute(f"COPY FROM DATABASe memory TO output_db;")
                 if debug:
                     print(f"COPY FROM DATABASe memory TO output_db;", file=sys.stderr)
-                    
                 # 4. Unregister the view (cleanup).
                 self.cx.unregister(self._tablename)
                 if debug:
                     print(f"self.cx.unregister({self._tablename})", file=sys.stderr)
-
                 # 5. Detach the output database.
                 self.cx.execute(f"DETACH output_db;")
                 if debug:
                     print(f"DETACH output_db;", file=sys.stderr)
                 return True
             except Exception as e:
-                print(f"Error saving to DuckDB: {e}")
+                print(f"Error saving to DuckDB: {e}", file=sys.stderr)
                 return False
         else:
-            print("No data to save to DuckDB.")
+            print("No data to save to DuckDB.", file=sys.stderr)
             return False
 
     def close_connection(self) -> None:
