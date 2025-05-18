@@ -79,31 +79,144 @@ class CS:
             return None
 
     def to_csv(self, filename: str, **kwargs) -> bool:
-        """Saves the data to a CSV file."""
+        """
+        Saves the data to a CSV file using DuckDB's SQL interface.
+
+        Args:
+            filename: The name of the CSV file.
+            **kwargs:  Currently not used, but kept for potential future extensions.
+
+        Returns:
+            True on success, False on failure.
+        """
         if self.data:
             try:
-                df_pd = self.data.df()
-                df_pd.to_csv(filename, **kwargs)
+                # Create a temporary view with the table name
+                self.cx.register(self._tablename, self.data)
+                # Use DuckDB's SQL to write to CSV
+                self.cx.execute(f"COPY (SELECT * FROM \"{self._tablename}\") TO '{filename}' (HEADER, DELIMITER ',');")
+                self.cx.unregister(self._tablename) # clean up
                 return True
             except Exception as e:
-                print(f"Error saving to CSV: {e}")
+                print(f"Error saving to CSV using DuckDB: {e}")
                 return False
         else:
             print("No data to save to CSV.")
             return False
 
-    def to_duckdb(self, filename: str, table_name: Optional[str] = None) -> bool:
+    def to_parquet(self, filename: str, **kwargs) -> bool:
         """
-        Saves the data to a DuckDB database file.  This method now
-        creates a *new* connection to the specified file, registers
-        the data, and closes the connection.  It does *not* use
-        the object's connection (self.cx) for this operation.
+        Saves the data to a Parquet file using DuckDB's SQL interface.
+
+        Args:
+            filename: The name of the Parquet file.
+            **kwargs:  Additional arguments to pass to DuckDB's COPY statement.
+                       For example, 'COMPRESSION'='SNAPPY'
+
+        Returns:
+            True on success, False on failure.
         """
         if self.data:
             try:
-                con = duckdb.connect(filename)  # Connect to the output file
-                con.register(table_name if table_name else self._tablename, self.data)
-                con.close()  # Close the connection after registering
+                # Create a temporary view
+                self.cx.register(self._tablename, self.data)
+                
+                # Construct the COPY statement.  Start with the basics.
+                sql = f"COPY (SELECT * FROM \"{self._tablename}\") TO '{filename}' (FORMAT 'PARQUET'"
+                
+                # Add any additional keyword arguments to the SQL command
+                for key, value in kwargs.items():
+                    sql += f", {key.upper()}='{value}'" # convert key to uppercase
+                sql += ");" # close the sql statement
+                
+                # Execute the SQL command
+                self.cx.execute(sql)
+                self.cx.unregister(self._tablename)
+                return True
+            except Exception as e:
+                print(f"Error saving to Parquet using DuckDB: {e}")
+                return False
+        else:
+            print("No data to save to Parquet.")
+            return False
+    def to_json(self, filename: str, **kwargs) -> bool:
+        """
+        Saves the data to a JSON file using DuckDB's SQL interface.
+
+        Args:
+            filename: The name of the JSON file.
+            **kwargs:  Additional arguments to pass to DuckDB's COPY statement
+                       (e.g., 'ARRAY' = TRUE, 'LINE DELIMITED' = TRUE).
+
+        Returns:
+            True on success, False on failure.
+        """
+        if self.data:
+            try:
+                # Register the relation as a temporary view
+                self.cx.register(self._tablename, self.data)
+
+                # Construct the COPY statement
+                sql = f"COPY (SELECT * FROM \"{self._tablename}\") TO '{filename}' (FORMAT 'JSON'"
+
+                # Add any additional keyword arguments to the SQL command
+                for key, value in kwargs.items():
+                    sql += f", {key.upper()} = {value}"  #  No quotes for boolean
+                sql += ");"
+
+                # Execute the SQL command
+                self.cx.execute(sql)
+                self.cx.unregister(self._tablename)
+                return True
+            except Exception as e:
+                print(f"Error saving to JSON using DuckDB: {e}")
+                return False
+        else:
+            print("No data to save to JSON.")
+            return False
+
+    def to_duckdb(self, filename: str, table_name: Optional[str] = None, debug: bool = False ) -> bool:
+        """
+        Saves the in-memory database to a DuckDB database file using ATTACH and COPY FROM DATABASE MEMORY.
+
+        Args:
+            filename: The name of the output DuckDB database file (.duckdb).
+            table_name: Optional table name.  If None, uses the generated name.
+                         Note: This table name is used *within* the attached database.
+
+        Returns:
+            True on success, False on failure.
+        """
+        if debug:
+            import sys
+        if self.data:
+            try:
+                output_table_name = table_name if table_name else self._tablename
+
+                # 1. Attach the output database.
+                self.cx.execute(f"ATTACH '{filename}' AS output_db;")
+                if debug:
+                    print(f"ATTACH '{filename}' AS output_db;", file=sys.stderr)
+
+                # 2. Register the data (relation) as a view in the *main* database.
+                self.cx.register(self._tablename, self.data)
+                if debug:
+                    print(f"self.cx.register('{self._tablename}', self.data)", file=sys.stderr)
+
+                # 3.  Use COPY FROM to copy the *entire* in-memory database.
+                self.cx.execute(f"COPY FROM DATABASe memory TO output_db;")
+                if debug:
+                    print(f"COPY FROM DATABASe memory TO output_db;", file=sys.stderr)
+                    
+                # 4. Unregister the view (cleanup).
+                self.cx.unregister(self._tablename)
+                if debug:
+                    print(f"self.cx.unregister({self._tablename})", file=sys.stderr)
+
+                # 5. Detach the output database.
+                self.cx.execute(f"DETACH output_db;")
+                if debug:
+                    print(f"DETACH output_db;", file=sys.stderr)
                 return True
             except Exception as e:
                 print(f"Error saving to DuckDB: {e}")
@@ -141,59 +254,3 @@ class CS:
         _table_name_separator = separator
         global _table_name_gen
         _table_name_gen = table_name_generator()
-
-# Example Usage
-import pandas as pd
-import polars as pl
-import duckdb
-
-# Create sample data
-data = {'col1': [1, 2, 3], 'col2': [4, 5, 6]}
-df_pd = pd.DataFrame(data)
-df_pl = pl.DataFrame(data)
-
-# Create CS instance
-cs1 = CS(df_pl) # Initialize with Polars DataFrame
-
-# Get data as Pandas and Polars DataFrames
-df_pandas1 = cs1.to_pandas()
-df_polars1 = cs1.to_polars()
-
-if df_pandas1 is not None:
-    print("Pandas DataFrame 1:")
-    print(df_pandas1)
-if df_polars1 is not None:
-    print("Polars DataFrame 1:")
-    print(df_polars1)
-    
-# Create another CS instance, loading from the first CS object's data
-cs2 = CS(cs1.data)
-
-df_pandas2 = cs2.to_pandas()
-df_polars2 = cs2.to_polars()
-
-if df_pandas2 is not None:
-    print("Pandas DataFrame 2:")
-    print(df_pandas2)
-if df_polars2 is not None:
-    print("Polars DataFrame 2:")
-    print(df_polars2)
-
-# Save data to CSV and DuckDB
-csv_success = cs1.to_csv("output.csv", index=False)
-duckdb_success = cs1.to_duckdb("output.duckdb")
-
-if csv_success:
-    print("Data saved to output.csv")
-if duckdb_success:
-    print("Data saved to output.duckdb")
-
-# Demonstrate setting prefix/separator
-CS.set_table_name_prefix("my_table")
-CS.set_table_name_separator("_")
-
-cs3 = CS(df_pd)
-print(f"Table name 3: {cs3.get_tablename()}")
-
-cs1.close_connection()  # Explicitly close the connection when done with cs1
-del cs1 # delete the object
