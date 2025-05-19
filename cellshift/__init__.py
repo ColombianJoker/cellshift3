@@ -172,8 +172,9 @@ class CS:
         _table_name_gen = table_name_generator()
 
 # Additional methods in accesory files
-from .columns import set_type, add_column, drop_column
+from .columns import set_type, add_column, drop_column, replace_column
 
 CS.set_type = set_type
 CS.add_column = add_column
 CS.drop_column = drop_column
+CS.replace_column = replace_column

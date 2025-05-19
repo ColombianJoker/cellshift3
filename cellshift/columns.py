@@ -159,3 +159,79 @@ def drop_column(self, column_names: Union[str, list, tuple]) -> None:
     finally:
         pass
         # print("drop_column: End")
+
+def replace_column(self, column_to_replace: Union[str, list, tuple], replace_column: Union[str, list, tuple]) -> None:
+    """
+    Replaces the contents of one or more columns with the data from another column or set of columns.
+
+    Args:
+        column_to_replace: A string or list/tuple of strings representing the column(s) to be replaced.
+        replace_column: A string or list/tuple of strings representing the column(s) to replace with.
+    """
+    print("replace_column: Start")
+    if self.data is None:
+        raise ValueError("No data loaded in the CS object.")
+
+    if isinstance(column_to_replace, str):
+        columns_to_replace_list = [column_to_replace]
+    elif isinstance(column_to_replace, (list, tuple)):
+        columns_to_replace_list = list(column_to_replace)
+    else:
+        raise TypeError("column_to_replace must be a string or a list/tuple of strings.")
+
+    if isinstance(replace_column, str):
+        replace_column_list = [replace_column]
+    elif isinstance(replace_column, (list, tuple)):
+        replace_column_list = list(replace_column)
+    else:
+        raise TypeError("replace_column must be a string or a list/tuple of strings.")
+
+    if not columns_to_replace_list or not replace_column_list:
+        raise ValueError("Both column_to_replace and replace_column must contain at least one column.")
+
+    if len(columns_to_replace_list) != len(replace_column_list):
+        raise ValueError("The number of columns to replace must match the number of replacement columns.")
+
+    # Validate column names
+    valid_columns = [col.lower() for col in self.data.columns]
+    columns_to_replace_lower = [col.lower() for col in columns_to_replace_list]
+    replace_column_lower = [col.lower() for col in replace_column_list]
+
+    for col in columns_to_replace_lower + replace_column_lower:
+        if col not in valid_columns:
+            raise ValueError(f"Column '{col}' not found in the data.")
+
+    # Construct the SQL query
+    original_table_name = self._original_tablename
+    select_parts = []
+    for i, col_to_replace in enumerate(columns_to_replace_list):
+        original_col_name = columns_to_replace_list[i]
+        replacement_col_name = replace_column_list[i]
+        select_parts.append(f'"{replacement_col_name}" AS "{original_col_name}"')
+
+    remaining_columns = [col for col in self.data.columns if col.lower() not in columns_to_replace_lower]
+    quoted_remaining_columns = [f'"{col}"' for col in remaining_columns]
+
+    if select_parts:
+        select_statement = ", ".join(quoted_remaining_columns + select_parts)
+    else:
+        select_statement = ", ".join(quoted_remaining_columns)
+
+    sql_query = f"""
+        SELECT {select_statement}
+        FROM "{original_table_name}"
+    """
+    print(f"replace_column: SQL Query: {sql_query}")
+
+    try:
+        # Execute the query to get the transformed data.
+        new_data = self.cx.execute(sql_query).fetch_arrow_table()
+
+        # Drop the existing table and create a new one with the replaced columns.
+        self.cx.execute(f"DROP TABLE IF EXISTS \"{self._tablename}\"")
+        self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM new_data")
+        self.data = self.cx.table(self._tablename)
+
+    finally:
+        pass
+        # print("replace_column: End")
