@@ -162,7 +162,8 @@ def drop_column(self, column_names: Union[str, list, tuple]) -> None:
 
 def replace_column(self, column_to_replace: Union[str, list, tuple], replace_column: Union[str, list, tuple]) -> None:
     """
-    Replaces the contents of one or more columns with the data from another column or set of columns.
+    Replaces the contents of one or more columns with the data from another column or set of columns,
+    preserving the original column order.
 
     Args:
         column_to_replace: A string or list/tuple of strings representing the column(s) to be replaced.
@@ -201,22 +202,22 @@ def replace_column(self, column_to_replace: Union[str, list, tuple], replace_col
         if col not in valid_columns:
             raise ValueError(f"Column '{col}' not found in the data.")
 
-    # Construct the SQL query
+    # Construct the SQL query, preserving column order
     original_table_name = self._original_tablename
+    original_columns = list(self.data.columns)  # Get original column order
     select_parts = []
-    for i, col_to_replace in enumerate(columns_to_replace_list):
-        original_col_name = columns_to_replace_list[i]
-        replacement_col_name = replace_column_list[i]
-        select_parts.append(f'"{replacement_col_name}" AS "{original_col_name}"')
 
-    remaining_columns = [col for col in self.data.columns if col.lower() not in columns_to_replace_lower]
-    quoted_remaining_columns = [f'"{col}"' for col in remaining_columns]
+    for original_col in original_columns:
+        original_col_lower = original_col.lower()
+        if original_col_lower in columns_to_replace_lower:
+            # Find the index of the column to replace
+            replace_index = columns_to_replace_lower.index(original_col_lower)
+            replacement_col_name = replace_column_list[replace_index]
+            select_parts.append(f'"{replacement_col_name}" AS "{original_col}"')
+        else:
+            select_parts.append(f'"{original_col}"')
 
-    if select_parts:
-        select_statement = ", ".join(quoted_remaining_columns + select_parts)
-    else:
-        select_statement = ", ".join(quoted_remaining_columns)
-
+    select_statement = ", ".join(select_parts)
     sql_query = f"""
         SELECT {select_statement}
         FROM "{original_table_name}"
