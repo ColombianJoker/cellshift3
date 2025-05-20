@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 from typing import Union, Optional
 import pandas as pd
 import duckdb
@@ -189,6 +189,7 @@ class CS:
 # Additional methods in accesory files
 from .columns import set_type, add_column, drop_column, replace_column
 from .auxiliary import letters_for, random_code, generate_kb_code, generate_mb_code, get_file_size
+from .destroy import fast_overwrite, destroy
 
 CS.set_type = set_type
 CS.add_column = add_column

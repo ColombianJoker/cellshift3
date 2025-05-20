@@ -1,7 +1,8 @@
-#!/usr/bin/env python3 
+
 import math
 import os
-import random
+# import random
+import secrets
 import string
 
 def letters_for(n_digits: int) -> str:
@@ -29,9 +30,11 @@ def random_code(n_letters: int, upper: bool = True) -> str:
       a string of random letters of length n_letters
   """
   if upper:
-      return "".join(random.choices(string.ascii_uppercase, k=n_letters))
+      # return "".join(random.choices(string.ascii_uppercase, k=n_letters))
+      return ''.join(secrets.choice(string.ascii_uppercase) for _ in range(n_letters))
   else:
-      return "".join(random.choices(string.ascii_lowercase, k=n_letters))
+      # return "".join(random.choices(string.ascii_lowercase, k=n_letters))
+      return ''.join(secrets.choice(string.ascii_lowercase) for _ in range(n_letters))
 
 def generate_kb_code(n_kb: int) -> str:
   """
