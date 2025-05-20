@@ -75,21 +75,36 @@ class CS:
         return self._original_tablename
 
     def to_pandas(self) -> Optional[pd.DataFrame]:
-        """Retrieves the data as a Pandas DataFrame."""
+        """Retrieves the data as a Pandas DataFrame.
+      
+        Returns:
+            the contents of .data member in Polars DataFrame format.
+        """
         if self.data:
             return self.data.df()
         else:
             return None
 
     def to_polars(self) -> Optional[pl.DataFrame]:
-        """Retrieves the data as a Polars DataFrame."""
+        """Retrieves the data as a Polars DataFrame.
+      
+        Returns:
+            the contents of .data member in Polars DataFrame format.
+        """
         if self.data:
             return pl.from_pandas(self.data.df())
         else:
             return None
 
     def to_csv(self, filename: str, **kwargs) -> bool:
-        """Saves the data to a CSV file using DuckDB's SQL interface."""
+        """Saves the data to a CSV file using DuckDB's SQL interface.
+        
+        Args:
+          filename: The name of the output CSV file.
+      
+        Returns:
+            True on success, False on failure.
+        """
         if self.data:
             try:
                 # Create a temporary view with the table name

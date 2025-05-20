@@ -29,6 +29,9 @@ def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series,
                        Python list, or tuple containing the data for the new column.
                        Must have only one column (or be a 1D list/tuple).
         column_name: The name of the new column (string).
+      
+    Returns:
+        a new version of the CS object
     """
     if self.data is None:
         raise ValueError("No data loaded in the CS object.")
@@ -111,6 +114,9 @@ def drop_column(self, column_names: Union[str, list, tuple]):
     Args:
         column_names: A string representing a single column name, or a list/tuple
                       of strings representing multiple column names to drop.
+
+    Returns:
+        a new version of the CS object
     """
     # print("drop_column: Start", file=sys.stderr)
     if self.data is None:
@@ -171,6 +177,9 @@ def replace_column(self, column_to_replace: Union[str, list, tuple], replace_col
     Args:
         column_to_replace: A string or list/tuple of strings representing the column(s) to be replaced.
         replace_column: A string or list/tuple of strings representing the column(s) to replace with.
+
+    Returns:
+        a new version of the CS object
     """
     # print("replace_column: Start", file=sys.stderr)
     if self.data is None:
