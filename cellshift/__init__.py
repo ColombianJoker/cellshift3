@@ -136,17 +136,17 @@ class CS:
                 output_table_name = table_name if table_name else self._original_tablename # Use original table name
 
                 # 1. Create a new connection to the *output* database file.
-                with duckdb.connect(database=filename, read_only=False) as output_con:
+                with duckdb.connect(database=filename, read_only=False) as output_cx:
                     # 2. Register the data (relation) as a view in the *output* connection.
-                    output_con.register(self._tablename, self.data)
+                    output_cx.register(self._tablename, self.data)
 
                     # 3. Create a table in the output database with the desired name.
-                    output_con.execute(
+                    output_cx.execute(
                         f"CREATE TABLE IF NOT EXISTS \"{output_table_name}\" AS SELECT * FROM \"{self._tablename}\""
                     )
 
                     # 4. Unregister the view.
-                    output_con.unregister(self._tablename)
+                    output_cx.unregister(self._tablename)
 
                 return True  # Indicate success
             except Exception as e:

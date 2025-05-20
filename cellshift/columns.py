@@ -83,15 +83,10 @@ def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series,
     original_columns_sql = ", ".join(
         [f'"{col}"' for col in self.data.columns]
     )  # Quote original column names
-    sql_query = f"""
-        SELECT
-            {original_columns_sql},
-            t2."{column_name}"
-        FROM
-            "{self._original_tablename}" AS t1
-        POSITIONAL JOIN
-            "{temp_view_name}" AS t2
-    """
+    sql_query = f""" SELECT {original_columns_sql}, t2."{column_name}"
+                     FROM "{self._original_tablename}" AS t1
+                    POSITIONAL JOIN "{temp_view_name}" AS t2
+                 """
     
     try:
         # Execute the query to add the column.
@@ -150,10 +145,7 @@ def drop_column(self, column_names: Union[str, list, tuple]) -> CS:
     quoted_columns_to_keep = [f'"{col}"' for col in columns_to_keep]
     select_statement = ", ".join(quoted_columns_to_keep)
 
-    sql_query = f"""
-        SELECT {select_statement}
-        FROM "{original_table_name}"
-    """
+    sql_query = f""" SELECT {select_statement} FROM "{original_table_name}" """
     # print(f"drop_column: SQL Query: {sql_query}", file=sys.stderr)
 
     try:
@@ -231,10 +223,7 @@ def replace_column(self, column_to_replace: Union[str, list, tuple], replace_col
             select_parts.append(f'"{original_col}"')
 
     select_statement = ", ".join(select_parts)
-    sql_query = f"""
-        SELECT {select_statement}
-        FROM "{original_table_name}"
-    """
+    sql_query = f""" SELECT {select_statement} FROM "{original_table_name}" """
     # print(f"replace_column: SQL Query: {sql_query}", file=sys.stderr)
 
     try:
