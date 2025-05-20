@@ -35,7 +35,6 @@ def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series,
     Returns:
         self: The CS object with the added column.
     """
-    # print("1: add_column: Start", file=sys.stderr)
     if self.data is None:
         raise ValueError("No data loaded in the CS object.")
 
@@ -73,12 +72,12 @@ def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series,
     # Register the  relation as a view in DuckDB.
     temp_view_name = f"_temp_df_{id(new_column_relation)}"  # Unique view name.
     self.cx.register(temp_view_name, new_column_relation)
-    # print(f"2: {temp_view_name=} registered!", file=sys.stderr)
+    # print(f"{temp_view_name=} registered!", file=sys.stderr)
 
     # Get the number of rows in the original data
     original_num_rows = self.cx.execute(f"SELECT count(*) FROM \"{self._original_tablename}\"").fetchone()[0]
     new_column_length = self.cx.execute(f"SELECT count(*) FROM \"{temp_view_name}\"").fetchone()[0]
-    # print(f"3: {original_num_rows=}, {new_column_length=}", file=sys.stderr)
+    # print(f"{original_num_rows=}, {new_column_length=}", file=sys.stderr)
 
     if original_num_rows != new_column_length:
         self.cx.unregister(temp_view_name)
@@ -93,11 +92,10 @@ def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series,
                      FROM "{self._original_tablename}" AS t1
                      POSITIONAL JOIN "{temp_view_name}" AS t2
                  """
-    # print(f"4: add_column: SQL Query: {sql_query=}", file=sys.stderr)
+    # print(f"add_column: SQL Query: {sql_query=}", file=sys.stderr)
 
     try:
         # Execute the query to add the column.
-        # self.cx.execute(sql_query)
         new_data = self.cx.execute(sql_query).fetch_arrow_table()
 
         # Drop the existing table and create a new one from the result.
@@ -109,8 +107,7 @@ def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series,
     finally:
         # Unregister the temporary view.
         self.cx.unregister(temp_view_name)
-        # print(f"5: add_column: Unregistered view {temp_view_name}", file=sys.stderr)
-    # print("6: add_column: End")
+        # print(f"add_column: Unregistered view {temp_view_name}", file=sys.stderr)
     return self
 
 def drop_column(self, column_names: Union[str, List[str], Tuple[str]]) -> CS:
@@ -124,7 +121,6 @@ def drop_column(self, column_names: Union[str, List[str], Tuple[str]]) -> CS:
     Returns:
         a new version of the CS object
     """
-    # print("drop_column: Start", file=sys.stderr)
     if self.data is None:
         raise ValueError("No data loaded in the CS object.")
 
@@ -169,7 +165,6 @@ def drop_column(self, column_names: Union[str, List[str], Tuple[str]]) -> CS:
 
     finally:
         pass
-        # print("drop_column: End", file=sys.stderr)
     return self
 
 def replace_column(self, column_to_replace: Union[str, List[str], Tuple[str]], replace_column: Union[str, List[str], Tuple[str]]) -> CS:
@@ -184,7 +179,6 @@ def replace_column(self, column_to_replace: Union[str, List[str], Tuple[str]], r
     Returns:
         a new version of the CS object
     """
-    # print("replace_column: Start", file=sys.stderr)
     if self.data is None:
         raise ValueError("No data loaded in the CS object.")
 
@@ -234,7 +228,6 @@ def replace_column(self, column_to_replace: Union[str, List[str], Tuple[str]], r
 
     select_statement = ", ".join(select_parts)
     sql_query = f""" SELECT {select_statement} FROM "{original_table_name}" """
-    # print(f"replace_column: SQL Query: {sql_query}", file=sys.stderr)
 
     try:
         # Execute the query to get the transformed data.
@@ -247,5 +240,4 @@ def replace_column(self, column_to_replace: Union[str, List[str], Tuple[str]], r
 
     finally:
         pass
-        # print("replace_column: End", file=sys.stderr)
     return self
