@@ -6,8 +6,9 @@ import pandas as pd
 import polars as pl
 from typing import Generator, Union, Optional
 import sys
+from . import CS  # Import CS from the main module to be able to return self with typing
 
-def set_type(self, column_name: str, new_type: str):
+def set_type(self, column_name: str, new_type: str) -> CS:
   """Set the type of a relation (table) column by casting and using the same name
   
   Args:
@@ -20,7 +21,7 @@ def set_type(self, column_name: str, new_type: str):
   self.data = new_rel
   return self
 
-def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series, np.ndarray, list, tuple], column_name: str):
+def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series, np.ndarray, list, tuple], column_name: str) -> CS:
     """
     Adds a column to the CS object's data using a positional join.
 
@@ -107,7 +108,7 @@ def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series,
         self.cx.unregister(temp_view_name)
     return self
 
-def drop_column(self, column_names: Union[str, list, tuple]):
+def drop_column(self, column_names: Union[str, list, tuple]) -> CS:
     """
     Drops one or more columns from the CS object's data.
 
@@ -169,7 +170,7 @@ def drop_column(self, column_names: Union[str, list, tuple]):
         # print("drop_column: End", file=sys.stderr)
     return self
 
-def replace_column(self, column_to_replace: Union[str, list, tuple], replace_column: Union[str, list, tuple]):
+def replace_column(self, column_to_replace: Union[str, list, tuple], replace_column: Union[str, list, tuple]) -> CS:
     """
     Replaces the contents of one or more columns with the data from another column or set of columns,
     preserving the original column order.
