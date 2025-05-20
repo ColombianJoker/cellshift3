@@ -188,7 +188,7 @@ class CS:
 
 # Additional methods in accesory files
 from .columns import set_type, add_column, drop_column, replace_column
-from .auxiliary import letters_for, random_code
+from .auxiliary import letters_for, random_code, generate_kb_code, generate_mb_code, get_file_size
 
 CS.set_type = set_type
 CS.add_column = add_column
