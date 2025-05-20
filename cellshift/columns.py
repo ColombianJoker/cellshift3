@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 import pyarrow as pa
-from typing import Generator, Union, Optional
+from typing import Generator, Union, Optional, List, Tuple
 import sys
 from . import CS  # Import CS from the main module to be able to return self with typing
 
@@ -113,7 +113,7 @@ def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series,
     # print("6: add_column: End")
     return self
 
-def drop_column(self, column_names: Union[str, list, tuple]) -> CS:
+def drop_column(self, column_names: Union[str, List[str], Tuple[str]]) -> CS:
     """
     Drops one or more columns from the CS object's data.
 
@@ -172,7 +172,7 @@ def drop_column(self, column_names: Union[str, list, tuple]) -> CS:
         # print("drop_column: End", file=sys.stderr)
     return self
 
-def replace_column(self, column_to_replace: Union[str, list, tuple], replace_column: Union[str, list, tuple]) -> CS:
+def replace_column(self, column_to_replace: Union[str, List[str], Tuple[str]], replace_column: Union[str, List[str], Tuple[str]]) -> CS:
     """
     Replaces the contents of one or more columns with the data from another column or set of columns,
     preserving the original column order.
