@@ -1,9 +1,10 @@
 #!/usr/bin/env python3 
 
-import duckdb as d
+import duckdb
 import numpy as np
 import pandas as pd
 import polars as pl
+import pyarrow as pa
 from typing import Generator, Union, Optional
 import sys
 from . import CS  # Import CS from the main module to be able to return self with typing
@@ -21,19 +22,20 @@ def set_type(self, column_name: str, new_type: str) -> CS:
   self.data = new_rel
   return self
 
-def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series, np.ndarray, list, tuple], column_name: str) -> CS:
+def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series, np.ndarray, list, tuple, duckdb.DuckDBPyRelation, pa.Array], column_name: str) -> CS:
     """
     Adds a column to the CS object's data using a positional join.
 
     Args:
-        column_object: A Pandas DataFrame/Series, Polars DataFrame, NumPy ndarray,
-                       Python list, or tuple containing the data for the new column.
-                       Must have only one column (or be a 1D list/tuple).
+        column_object: A Pandas DataFrame/Series, Polars DataFrame, NumPy ndarray, Python list/tuple,
+                       DuckDB or PyArrow Array relation containing the data for the new column.
+                       If DataFrame/Series, must have only one column (or be a 1D list/tuple).
         column_name: The name of the new column (string).
-      
+
     Returns:
-        a new version of the CS object
+        self: The CS object with the added column.
     """
+    # print("1: add_column: Start", file=sys.stderr)
     if self.data is None:
         raise ValueError("No data loaded in the CS object.")
 
@@ -43,18 +45,23 @@ def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series,
             raise ValueError("Column object must have only one column when it is a DataFrame.")
         if isinstance(column_object, pl.DataFrame):
             column_object = column_object.to_pandas()  # Convert to Pandas
-        new_column_pd = column_object.iloc[:, 0]  # Extract the Series
+        new_column_relation = self.cx.from_df(column_object)  # Create relation
     elif isinstance(column_object, pd.Series):
-        new_column_pd = column_object
+        new_column_relation = self.cx.from_df(pd.DataFrame({column_name: column_object}))
     elif isinstance(column_object, np.ndarray):
         if column_object.ndim != 1:
             raise ValueError("NumPy array must be 1-dimensional.")
-        new_column_pd = pd.Series(column_object)
+        new_column_relation = self.cx.from_df(pd.DataFrame({column_name: column_object}))
     elif isinstance(column_object, (list, tuple)):
-        new_column_pd = pd.Series(column_object)
+        new_column_relation = self.cx.from_df(pd.DataFrame({column_name: column_object}))
+    elif isinstance(column_object, duckdb.DuckDBPyRelation):
+        new_column_relation = column_object
+    elif isinstance(column_object, pa.Array):
+      new_column_table = pa.table({column_name: column_object})
+      new_column_relation = self.cx.from_arrow(new_column_table)
     else:
         raise TypeError(
-            "Unsupported column object type. Must be Pandas DataFrame/Series, Polars DataFrame, NumPy ndarray, list, or tuple."
+            "Unsupported column object type. Must be Pandas DataFrame/Series, Polars DataFrame, NumPy ndarray, list, tuple, DuckDB relation or PyArrow array."
         )
 
     # Ensure the column name is valid
@@ -63,16 +70,15 @@ def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series,
     if not column_name.isidentifier():
         raise ValueError("column_name must be a valid identifier (no spaces or special characters).")
 
-    # Create a temporary DataFrame for the new column.
-    temp_df = pd.DataFrame({column_name: new_column_pd})
-
-    # Register the temporary DataFrame as a view in DuckDB.
-    temp_view_name = f"_temp_df_{id(temp_df)}"  # Unique view name.
-    self.cx.register(temp_view_name, temp_df)
+    # Register the  relation as a view in DuckDB.
+    temp_view_name = f"_temp_df_{id(new_column_relation)}"  # Unique view name.
+    self.cx.register(temp_view_name, new_column_relation)
+    # print(f"2: {temp_view_name=} registered!", file=sys.stderr)
 
     # Get the number of rows in the original data
     original_num_rows = self.cx.execute(f"SELECT count(*) FROM \"{self._original_tablename}\"").fetchone()[0]
-    new_column_length = len(temp_df)
+    new_column_length = self.cx.execute(f"SELECT count(*) FROM \"{temp_view_name}\"").fetchone()[0]
+    # print(f"3: {original_num_rows=}, {new_column_length=}", file=sys.stderr)
 
     if original_num_rows != new_column_length:
         self.cx.unregister(temp_view_name)
@@ -85,22 +91,26 @@ def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series,
     )  # Quote original column names
     sql_query = f""" SELECT {original_columns_sql}, t2."{column_name}"
                      FROM "{self._original_tablename}" AS t1
-                    POSITIONAL JOIN "{temp_view_name}" AS t2
+                     POSITIONAL JOIN "{temp_view_name}" AS t2
                  """
-    
+    # print(f"4: add_column: SQL Query: {sql_query=}", file=sys.stderr)
+
     try:
         # Execute the query to add the column.
-        new_data = self.cx.execute(sql_query).fetch_arrow_table() # Fetch as Arrow table
+        # self.cx.execute(sql_query)
+        new_data = self.cx.execute(sql_query).fetch_arrow_table()
 
         # Drop the existing table and create a new one from the result.
         self.cx.execute(f"DROP TABLE IF EXISTS \"{self._tablename}\"")
-        # Create a table from the arrow table.
-        self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM new_data")
+        self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM new_data;")
         self.data = self.cx.table(self._tablename)
+        # return self
 
     finally:
         # Unregister the temporary view.
         self.cx.unregister(temp_view_name)
+        # print(f"5: add_column: Unregistered view {temp_view_name}", file=sys.stderr)
+    # print("6: add_column: End")
     return self
 
 def drop_column(self, column_names: Union[str, list, tuple]) -> CS:
@@ -126,7 +136,7 @@ def drop_column(self, column_names: Union[str, list, tuple]) -> CS:
         raise TypeError("column_names must be a string or a list/tuple of strings.")
 
     if not columns_to_drop:  # Check for empty list
-        print("drop_column: No columns to drop.")
+        print("drop_column: No columns to drop.", file=sys.stderr)
         return
 
     # Validate column names
