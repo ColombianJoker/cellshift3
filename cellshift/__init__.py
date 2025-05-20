@@ -190,10 +190,11 @@ class CS:
 from .columns import set_type, add_column, drop_column, replace_column
 from .auxiliary import letters_for, random_code, generate_kb_code, generate_mb_code, get_file_size
 from .destroy import fast_overwrite, destroy
-from .noise import add_gaussian_noise_column
+from .noise import add_gaussian_noise_column, add_impulse_noise_column
 
 CS.set_type = set_type
 CS.add_column = add_column
 CS.drop_column = drop_column
 CS.replace_column = replace_column
 CS.add_gaussian_noise_column = add_gaussian_noise_column
+CS.add_impulse_noise_column = add_impulse_noise_column
