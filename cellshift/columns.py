@@ -18,8 +18,9 @@ def set_type(self, column_name: str, new_type: str):
     f"* EXCLUDE {column_name}, CAST({column_name} AS {new_type}) AS {column_name};"
   )
   self.data = new_rel
+  return self
 
-def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series, np.ndarray, list, tuple], column_name: str) -> None:
+def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series, np.ndarray, list, tuple], column_name: str):
     """
     Adds a column to the CS object's data using a positional join.
 
@@ -101,8 +102,9 @@ def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series,
     finally:
         # Unregister the temporary view.
         self.cx.unregister(temp_view_name)
+    return self
 
-def drop_column(self, column_names: Union[str, list, tuple]) -> None:
+def drop_column(self, column_names: Union[str, list, tuple]):
     """
     Drops one or more columns from the CS object's data.
 
@@ -110,7 +112,7 @@ def drop_column(self, column_names: Union[str, list, tuple]) -> None:
         column_names: A string representing a single column name, or a list/tuple
                       of strings representing multiple column names to drop.
     """
-    print("drop_column: Start")
+    # print("drop_column: Start", file=sys.stderr)
     if self.data is None:
         raise ValueError("No data loaded in the CS object.")
 
@@ -145,7 +147,7 @@ def drop_column(self, column_names: Union[str, list, tuple]) -> None:
         SELECT {select_statement}
         FROM "{original_table_name}"
     """
-    # print(f"drop_column: SQL Query: {sql_query}")
+    # print(f"drop_column: SQL Query: {sql_query}", file=sys.stderr)
 
     try:
         # Execute the query to get the data with dropped columns.
@@ -158,9 +160,10 @@ def drop_column(self, column_names: Union[str, list, tuple]) -> None:
 
     finally:
         pass
-        # print("drop_column: End")
+        # print("drop_column: End", file=sys.stderr)
+    return self
 
-def replace_column(self, column_to_replace: Union[str, list, tuple], replace_column: Union[str, list, tuple]) -> None:
+def replace_column(self, column_to_replace: Union[str, list, tuple], replace_column: Union[str, list, tuple]):
     """
     Replaces the contents of one or more columns with the data from another column or set of columns,
     preserving the original column order.
@@ -169,7 +172,7 @@ def replace_column(self, column_to_replace: Union[str, list, tuple], replace_col
         column_to_replace: A string or list/tuple of strings representing the column(s) to be replaced.
         replace_column: A string or list/tuple of strings representing the column(s) to replace with.
     """
-    print("replace_column: Start")
+    # print("replace_column: Start", file=sys.stderr)
     if self.data is None:
         raise ValueError("No data loaded in the CS object.")
 
@@ -222,7 +225,7 @@ def replace_column(self, column_to_replace: Union[str, list, tuple], replace_col
         SELECT {select_statement}
         FROM "{original_table_name}"
     """
-    print(f"replace_column: SQL Query: {sql_query}")
+    # print(f"replace_column: SQL Query: {sql_query}", file=sys.stderr)
 
     try:
         # Execute the query to get the transformed data.
@@ -235,4 +238,5 @@ def replace_column(self, column_to_replace: Union[str, list, tuple], replace_col
 
     finally:
         pass
-        # print("replace_column: End")
+        # print("replace_column: End", file=sys.stderr)
+    return self
