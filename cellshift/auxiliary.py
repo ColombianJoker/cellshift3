@@ -14,7 +14,7 @@ def letters_for(n_digits: int) -> str:
   Returns:
       the minimun numbers of latin (capital) letters needed to represent a number of n_digits
   """
-  LETTERS=26
+  LETTERS=26 # Only use basic latin (no euro) alphabet
   log_10=math.log10(LETTERS)
   n_letters=math.ceil(n_digits/log_10) # round up
   return n_letters
