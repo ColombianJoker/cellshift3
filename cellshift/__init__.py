@@ -10,7 +10,7 @@ import sys
 _table_name_prefix = "table"
 _table_name_separator = "_"
 
-def table_name_generator():
+def table_name_generator() -> str:
     """Generator function to create unique table names."""
     seq = 0
     while True:
@@ -188,6 +188,7 @@ class CS:
 
 # Additional methods in accesory files
 from .columns import set_type, add_column, drop_column, replace_column
+from .auxiliary import letters_for, random_code
 
 CS.set_type = set_type
 CS.add_column = add_column
