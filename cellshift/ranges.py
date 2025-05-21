@@ -510,9 +510,6 @@ def age_range_column(self, base_column: str,
     Returns:
         a new version of the CS object
     """
-    if verbose:
-        print(f"1: age_range_column: Start for column '{base_column}'", file=sys.stderr)
-    
     # Validate base_column exists
     if self.data is None:
         raise ValueError("No data loaded in the CS object.")
@@ -524,9 +521,7 @@ def age_range_column(self, base_column: str,
     temp_range_column_name = f"range_age_{base_column}" # More specific temporary name
 
     try:
-        # Step 1: Create a new temporary column with age range values
-        if verbose:
-            print(f"2: age_range_column: Adding temporary age range column '{temp_range_column_name}'.", file=sys.stderr)
+        # Create a new temporary column with age range values
         self.add_age_range_column(
             base_column=base_column,
             new_column_name=temp_range_column_name,
@@ -538,25 +533,21 @@ def age_range_column(self, base_column: str,
             verbose=verbose
         )
         if verbose:
-            print(f"3: age_range_column: Temporary age range column '{temp_range_column_name}' added.", file=sys.stderr)
+            print(f"age_range_column: Temporary age range column '{temp_range_column_name}' added.", file=sys.stderr)
 
-        # Step 2: Replace the original column with the new range column
+        # Replace the original column with the new range column
         # DuckDB's replace_column (via CREATE TABLE AS SELECT) handles type changes.
-        if verbose:
-            print(f"4: age_range_column: Replacing '{base_column}' with '{temp_range_column_name}'.", file=sys.stderr)
         self.replace_column(
             column_to_replace=base_column,
             replace_column=temp_range_column_name
         )
         if verbose:
-            print(f"5: age_range_column: Column '{base_column}' replaced.", file=sys.stderr)
+            print(f"age_range_column: Column '{base_column}' replaced.", file=sys.stderr)
 
-        # Step 3: Remove the temporary range column
-        if verbose:
-            print(f"6: age_range_column: Dropping temporary range column '{temp_range_column_name}'.", file=sys.stderr)
+        # Remove the temporary range column
         self.drop_column(temp_range_column_name)
         if verbose:
-            print(f"7: age_range_column: Temporary range column '{temp_range_column_name}' dropped.", file=sys.stderr)
+            print(f"age_range_column: Temporary range column '{temp_range_column_name}' dropped.", file=sys.stderr)
 
         return self
 
@@ -575,5 +566,5 @@ def age_range_column(self, base_column: str,
         raise e # Re-raise the original exception
 
     finally:
-        if verbose:
-            print(f"8: age_range_column: End for column '{base_column}'.", file=sys.stderr)
+        pass
+    return self
