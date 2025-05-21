@@ -315,3 +315,67 @@ def add_salt_pepper_noise_column(self, base_column: str, new_column_name: Option
         # print("add_salt_pepper_noise_column: End", file=sys.stderr)
         
     return self
+
+def gaussian_column(self, column_name: str, verbose: bool = False) -> CS:
+    """
+    Applies Gaussian noise to a specified column, replacing its original values.
+
+    Args:
+        column_name: The name of the column to apply noise to and replace.
+        verbose: If True, print debug information.
+
+    Returns:
+        a new version of the CS object
+    """
+    # Validate column_name exists
+    if self.data is None:
+        raise ValueError("No data loaded in the CS object.")
+    valid_columns = [col.lower() for col in self.data.columns]
+    if column_name.lower() not in valid_columns:
+        raise ValueError(f"Column '{column_name}' not found in the data.")
+
+    # Define the name for the temporary noise column
+    temp_noise_column_name = f"noised_{column_name}"
+
+    try:
+        # Create a new column with Gaussian noise
+        # Call add_gaussian_noise_column with only the arguments it expects
+        self.add_gaussian_noise_column(
+            base_column=column_name,
+            new_column_name=temp_noise_column_name,
+        )
+        if verbose:
+            print(f"gaussian_column: Temporary noise column '{temp_noise_column_name}' added.", file=sys.stderr)
+
+        # Replace the original column with the noise column
+        self.replace_column(
+            column_to_replace=column_name,
+            replace_column=temp_noise_column_name
+        )
+        if verbose:
+            print(f"gaussian_column: Column '{column_name}' replaced.", file=sys.stderr)
+
+        # Remove the temporary noise column
+        self.drop_column(temp_noise_column_name)
+        if verbose:
+          print(f"gaussian_column: Temporary noise column '{temp_noise_column_name}' dropped.", file=sys.stderr)
+
+        return self
+
+    except Exception as e:
+        print(f"Error in gaussian_column for column '{column_name}': {e}", file=sys.stderr)
+        # Attempt to clean up the temporary column if an error occurred before dropping it
+        try:
+            # Check if the temporary column exists before trying to drop it
+            if temp_noise_column_name.lower() in valid_columns: # Use valid_columns from earlier for robustness
+                self.drop_column(temp_noise_column_name)
+                if verbose:
+                  print(f"Cleaned up temporary column '{temp_noise_column_name}' due to error.", file=sys.stderr)
+        except Exception as cleanup_e:
+            print(f"Error during cleanup of temporary column '{temp_noise_column_name}': {cleanup_e}", file=sys.stderr)
+        raise e # Re-raise the original exception
+
+    finally:
+        pass
+        # print(f"gaussian_column: End for column '{column_name}'.", file=sys.stderr)
+    return self
