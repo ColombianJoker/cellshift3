@@ -271,10 +271,9 @@ def add_float_range_column(self, base_column: str, new_column_name: Optional[str
         range_size: The desired size of each range.
                     Exactly one of 'num_ranges' or 'range_size' must be provided.
         only_start: If True, the new column will contain only the floating-point start of each range.
-                    If False, it will contain a list [range_start, range_end_exclusive].
-        min_range_start: Optional. If provided, this value will be used as the
-                         absolute minimum for range calculation, overriding the
-                         minimum value found in 'base_column'.
+                    If False, it will contain a list [range_start, range_end].
+        min_range_start: Optional. If provided, this value will be used as the absolute minimum for
+                    range calculation, overriding the minimum value found in 'base_column'.
         decimals: The number of decimal places to round the range start and end values to.
                   Defaults to 1.
         verbose: If True, print debug information.
@@ -282,9 +281,6 @@ def add_float_range_column(self, base_column: str, new_column_name: Optional[str
     Returns:
         a new version of the CS object
     """
-    if verbose:
-        print(f"1: add_float_range_column: Start, base_column='{base_column}', min_range_start={min_range_start}, decimals={decimals}", file=sys.stderr)
-
     if self.data is None:
         raise ValueError("No data loaded in the CS object.")
 
@@ -300,8 +296,6 @@ def add_float_range_column(self, base_column: str, new_column_name: Optional[str
         raise TypeError("new_column_name must be a string")
     if not new_column_name.isidentifier():
         raise ValueError("new_column_name must be a valid identifier (e.g., no spaces or special characters).")
-
-    # Validate range parameters
     if (num_ranges is None and range_size is None) or \
        (num_ranges is not None and range_size is not None):
         raise ValueError("Exactly one of 'num_ranges' or 'range_size' must be provided.")
@@ -309,11 +303,9 @@ def add_float_range_column(self, base_column: str, new_column_name: Optional[str
         raise ValueError("'num_ranges' must be a positive integer.")
     if range_size is not None and range_size <= 0:
         raise ValueError("'range_size' must be a positive number.")
-
     # Validate min_range_start
     if min_range_start is not None and not isinstance(min_range_start, (int, float)):
         raise TypeError("'min_range_start' must be an int or float if provided.")
-    
     # Validate decimals
     if not isinstance(decimals, int) or decimals < 0:
         raise TypeError("'decimals' must be a non-negative integer.")
@@ -322,30 +314,22 @@ def add_float_range_column(self, base_column: str, new_column_name: Optional[str
         # Get min and max values from the base column
         min_max_sql = f"SELECT MIN(\"{base_column}\"), MAX(\"{base_column}\") FROM \"{self._tablename}\""
         min_val_raw, max_val_raw = self.cx.execute(min_max_sql).fetchone()
-
         if min_val_raw is None or max_val_raw is None:
             raise ValueError(f"Could not calculate MIN/MAX for column '{base_column}'. Is it all NULLs or non-numeric?")
-        
         # Determine the effective min_val for range calculation
         effective_min_val = float(min_val_raw)
         if min_range_start is not None:
             effective_min_val = float(min_range_start)
-
         max_val = float(max_val_raw)
-
-        if verbose:
-            print(f"2: add_float_range_column: Base column '{base_column}' calculated min: {min_val_raw}, max: {max_val_raw}", file=sys.stderr)
-            if min_range_start is not None:
-                print(f"2.1: add_float_range_column: Using overridden min_range_start: {effective_min_val}", file=sys.stderr)
 
         # Determine effective range_size and num_ranges
         calculated_range_size = 0.0
         calculated_num_ranges = 0
         total_span = max_val - effective_min_val
 
-        # Handle edge case where total_span is zero or negative (e.g., all values are the same)
+        # Handle edge case where total_span is zero or negative
         if total_span <= 0:
-            calculated_range_size = 1.0 # Default to a range size of 1 for a single bin
+            calculated_range_size = 1.0
             calculated_num_ranges = 1
         elif num_ranges is not None:
             calculated_num_ranges = num_ranges
@@ -357,10 +341,15 @@ def add_float_range_column(self, base_column: str, new_column_name: Optional[str
             if calculated_num_ranges == 0: # Ensure at least one range if span is tiny
                 calculated_num_ranges = 1
 
+        # Calculate epsilon for rounding adjustment. Used to reduce the range_end "a little"
+        epsilon = 1 / (10 ** decimals)
         if verbose:
-            print(f"3: add_float_range_column: Calculated range_size: {calculated_range_size}, num_ranges: {calculated_num_ranges}", file=sys.stderr)
+            print(f"add_float_range_column: Epsilon for rounding adjustment: {epsilon}", file=sys.stderr)
 
-        # Fetch the base_column data to process in Python
+        if verbose:
+            print(f"add_float_range_column: Calculated range_size: {calculated_range_size}, num_ranges: {calculated_num_ranges}", file=sys.stderr)
+
+        # Get the base_column data to process in Python
         base_column_values_sql = f"SELECT \"{base_column}\" FROM \"{self._tablename}\" ORDER BY rowid"
         base_column_data_arrow = self.cx.execute(base_column_values_sql).fetch_arrow_table()
         original_values_np = base_column_data_arrow[base_column].to_numpy()
@@ -371,34 +360,26 @@ def add_float_range_column(self, base_column: str, new_column_name: Optional[str
                 new_column_values.append(None)
                 continue
 
-            # Calculate range for current value
-            # Ensure float conversion for index calculation
-            
             # Calculate the raw bin index
-            if calculated_range_size == 0: # Avoid division by zero for single-point span
+            if calculated_range_size == 0: # Handle division by zero
                 range_idx = 0
             else:
                 range_idx = (val - effective_min_val) / calculated_range_size
-                range_idx = int(np.floor(range_idx)) # Use np.floor for consistency with floats
+                range_idx = int(np.floor(range_idx))
 
             # Ensure range_idx stays within bounds of calculated_num_ranges
             range_idx = max(0, min(range_idx, calculated_num_ranges - 1))
-
             current_range_start = effective_min_val + range_idx * calculated_range_size
-            current_range_end_raw = effective_min_val + (range_idx + 1) * calculated_range_size
-            
-            # Round the start and end of the range
             current_range_start_rounded = round(current_range_start, decimals)
-            current_range_end_rounded = round(current_range_end_raw, decimals)
+            current_range_end_rounded = 0.0
 
-            # Special handling for the very last range to ensure max_val is covered
-            # If this is the last bin, make sure its end is at least max_val
-            # This ensures the interval [start, end) includes the max_val
             if range_idx == calculated_num_ranges - 1:
-                current_range_end_rounded = max(current_range_end_rounded, round(max_val, decimals))
-                # Also, ensure the last range's start doesn't exceed max_val if the span is tiny
+                current_range_end_rounded = round(max_val, decimals)
                 current_range_start_rounded = min(current_range_start_rounded, round(max_val, decimals))
-
+            else:
+                next_range_start_raw = effective_min_val + (range_idx + 1) * calculated_range_size
+                next_range_start_rounded = round(next_range_start_raw, decimals)
+                current_range_end_rounded = next_range_start_rounded - epsilon
 
             if only_start:
                 new_column_values.append(current_range_start_rounded)
@@ -417,13 +398,8 @@ def add_float_range_column(self, base_column: str, new_column_name: Optional[str
         # Create a temporary PyArrow Table for the new column
         new_col_arrow_table = pa.table({new_column_name: new_col_arrow_array})
 
-        if verbose:
-            print(f"4: add_float_range_column: Generated new column data as Arrow Table.", file=sys.stderr)
-
         # Add the new column using the existing add_column method
         self.add_column(self.cx.from_arrow(new_col_arrow_table), new_column_name)
-        if verbose:
-            print(f"5: add_float_range_column: New column '{new_column_name}' added.", file=sys.stderr)
 
         return self
 
@@ -433,6 +409,5 @@ def add_float_range_column(self, base_column: str, new_column_name: Optional[str
         raise e  # Re-raise the exception to propagate it.
 
     finally:
-        if verbose:
-            print("6: add_float_range_column: End", file=sys.stderr)
+        pass
     return self
