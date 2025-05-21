@@ -192,7 +192,7 @@ from .auxiliary import letters_for, random_code, generate_kb_code, generate_mb_c
 from .destroy import fast_overwrite, destroy
 from .noise import add_gaussian_noise_column, add_impulse_noise_column, add_salt_pepper_noise_column
 from .noise import gaussian_column, impulse_column, salt_pepper_column
-from .ranges import add_integer_range_column, add_age_range_column
+from .ranges import add_integer_range_column, add_age_range_column, add_float_range_column
 
 CS.set_type = set_type
 CS.add_column = add_column
@@ -206,3 +206,4 @@ CS.impulse_column = impulse_column
 CS.salt_pepper_column = salt_pepper_column
 CS.add_integer_range_column = add_integer_range_column
 CS.add_age_range_column = add_age_range_column
+CS.add_float_range_column = add_float_range_column
