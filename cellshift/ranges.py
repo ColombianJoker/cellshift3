@@ -411,3 +411,79 @@ def add_float_range_column(self, base_column: str, new_column_name: Optional[str
     finally:
         pass
     return self
+    
+def integer_range_column(self, base_column: str,
+                         num_ranges: Optional[int] = None, range_size: Optional[int] = None,
+                         only_start: bool = False, min_range_start: Optional[Union[int, float]] = None,
+                         verbose: bool = False) -> CS:
+    """
+    Replaces an existing column with a new column containing integer range values.
+
+    Args:
+        base_column: The name of the column to replace with integer range values.
+        num_ranges: The desired number of ranges to create.
+        range_size: The desired size of each range.
+                    Exactly one of 'num_ranges' or 'range_size' must be provided.
+        only_start: If True, the new column will contain only the integer start of each range.
+                    If False, it will contain a list [range_start, range_end].
+        min_range_start: Optional. If provided, this value will be used as the
+                         absolute minimum for range calculation, overriding the
+                         minimum value found in 'base_column'.
+        verbose: If True, print debug information.
+
+    Returns:
+        a new version of the CS object
+    """
+    # Validate base_column exists
+    if self.data is None:
+        raise ValueError("No data loaded in the CS object.")
+    valid_columns = [col.lower() for col in self.data.columns]
+    if base_column.lower() not in valid_columns:
+        raise ValueError(f"Column '{base_column}' not found in the data.")
+
+    # Define the name for the temporary range column
+    temp_range_column_name = f"range_{base_column}"
+
+    try:
+        self.add_integer_range_column(
+            base_column=base_column,
+            new_column_name=temp_range_column_name,
+            num_ranges=num_ranges,
+            range_size=range_size,
+            only_start=only_start,
+            min_range_start=min_range_start,
+            verbose=verbose
+        )
+        # Replace the original column with the new range column
+        # DuckDB's replace_column (via CREATE TABLE AS SELECT) handles type changes.
+        self.replace_column(
+            column_to_replace=base_column,
+            replace_column=temp_range_column_name
+        )
+        if verbose:
+            print(f"integer_range_column: Column '{base_column}' replaced.", file=sys.stderr)
+
+        # Remove the temporary range column
+        self.drop_column(temp_range_column_name)
+        if verbose:
+            print(f"integer_range_column: Temporary range column '{temp_range_column_name}' dropped.", file=sys.stderr)
+
+        return self
+
+    except Exception as e:
+        if verbose:
+            print(f"Error in integer_range_column for column '{base_column}': {e}", file=sys.stderr)
+        # Attempt to clean up the temporary column if an error occurred before dropping it
+        try:
+            # drop_column handles non-existent columns gracefully, so a direct call is fine.
+            self.drop_column(temp_range_column_name)
+            if verbose:
+                print(f"Cleaned up temporary column '{temp_range_column_name}' due to error.", file=sys.stderr)
+        except Exception as cleanup_e:
+            if verbose:
+                print(f"Error during cleanup of temporary column '{temp_range_column_name}': {cleanup_e}", file=sys.stderr)
+        raise e # Re-raise the original exception
+
+    finally:
+        pass
+    return self
