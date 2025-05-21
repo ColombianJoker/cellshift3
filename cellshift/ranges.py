@@ -10,7 +10,8 @@ from . import CS  # Import CS from the main module to be able to return self wit
 
 def add_integer_range_column(self, base_column: str, new_column_name: Optional[str] = None,
                              num_ranges: Optional[int] = None, range_size: Optional[int] = None,
-                             only_start: bool = False, verbose: bool = False) -> CS:
+                             only_start: bool = False, min_range_start: Optional[Union[int, float]] = None,
+                             verbose: bool = False) -> CS:
     """
     Adds a new column containing integer range values based on a base column's min/max.
 
@@ -18,15 +19,15 @@ def add_integer_range_column(self, base_column: str, new_column_name: Optional[s
         base_column: The name of the numeric column to derive min/max values from.
         new_column_name: The name of the new column. If None, defaults to "integer_range_{base_column}".
         num_ranges: The desired number of ranges to create.
-        range_size: The desired size of each range.
-                    Exactly one of 'num_ranges' or 'range_size' must be provided.
+        range_size: The desired size of each range. Exactly one of 'num_ranges' or 'range_size' must be given.
         only_start: If True, the new column will contain only the integer start of each range.
                     If False, it will contain a list [range_start, range_end].
+        min_range_start: Optional. If provided, this value will be used as the absolute
+                         minimum for range calculation, overriding the minimum value found in 'base_column'.
         verbose: If True, print debug information.
 
     Returns:
-        self: The CS object with the added integer range column.
-
+        a new version of the CS object
     """
     if self.data is None:
         raise ValueError("No data loaded in the CS object.")
@@ -53,6 +54,10 @@ def add_integer_range_column(self, base_column: str, new_column_name: Optional[s
     if range_size is not None and range_size <= 0:
         raise ValueError("'range_size' must be a positive integer.")
 
+    # Validate min_range_start
+    if min_range_start is not None and not isinstance(min_range_start, (int, float)):
+        raise TypeError("'min_range_start' must be an int or float if provided.")
+
     try:
         # Get min and max values from the base column
         min_max_sql = f"SELECT MIN(\"{base_column}\"), MAX(\"{base_column}\") FROM \"{self._tablename}\""
@@ -61,56 +66,59 @@ def add_integer_range_column(self, base_column: str, new_column_name: Optional[s
         if min_val_raw is None or max_val_raw is None:
             raise ValueError(f"Could not calculate MIN/MAX for column '{base_column}'. Is it all NULLs or non-numeric?")
         
-        # Ensure min/max are integers for range calculation
-        min_val = int(min_val_raw)
+        # Determine the effective min_val for range calculation
+        # Use min_range_start if provided, otherwise use the calculated min_val
+        effective_min_val = int(min_val_raw)
+        if min_range_start is not None:
+            effective_min_val = int(min_range_start)
+
+        # Ensure max_val is an integer
         max_val = int(max_val_raw)
+
+        if verbose:
+            print(f"add_integer_range_column: Base column '{base_column}' calculated min: {int(min_val_raw)}, max: {max_val}", file=sys.stderr)
+            if min_range_start is not None:
+                print(f"add_integer_range_column: Using overridden min_range_start: {effective_min_val}", file=sys.stderr)
 
         # Determine effective range_size and num_ranges
         calculated_range_size = 0
         calculated_num_ranges = 0
-        total_span = max_val - min_val + 1
+        total_span = max_val - effective_min_val + 1
 
-        if total_span <= 0: # Handle cases where min_val >= max_val
+        if total_span <= 0: # Handle cases where effective_min_val >= max_val
             calculated_range_size = 1
             calculated_num_ranges = 1
         elif num_ranges is not None:
             calculated_num_ranges = num_ranges
-            calculated_range_size = (total_span + num_ranges - 1) // num_ranges # Ceiling division
+            calculated_range_size = (total_span + num_ranges - 1) // num_ranges # Integer division
         elif range_size is not None:
             calculated_range_size = range_size
-            calculated_num_ranges = (total_span + range_size - 1) // range_size # Ceiling division
-        
-        if calculated_range_size == 0: # Fallback for very small spans if num_ranges is huge
+            calculated_num_ranges = (total_span + range_size - 1) // range_size # Integer division
+        if calculated_range_size == 0: # To handle some errors
             calculated_range_size = 1
-            calculated_num_ranges = total_span # Each value gets its own range
-
+            calculated_num_ranges = total_span
         if verbose:
             print(f"add_integer_range_column: Calculated range_size: {calculated_range_size}, num_ranges: {calculated_num_ranges}", file=sys.stderr)
 
-        # Fetch the base_column data to process in Python. rowid just because
+        # Fetch the base_column data to process in Python
         base_column_values_sql = f"SELECT \"{base_column}\" FROM \"{self._tablename}\" ORDER BY rowid"
         base_column_data_arrow = self.cx.execute(base_column_values_sql).fetch_arrow_table()
         original_values_np = base_column_data_arrow[base_column].to_numpy()
 
         new_column_values = []
         for val in original_values_np:
-            if np.isnan(val):                   # Check for N/As o NULLs
+            if np.isnan(val): # Check for NaN values (which represent NULLs from DuckDB)
                 new_column_values.append(None)
                 continue
-
-            # Calculate range for current value
-            # Ensure integer conversion for index calculation
-            range_idx = (int(val) - min_val) // calculated_range_size
-            
-            # Ensure range_idx stays within bounds of calculated_num_ranges
+            # Calculate range for current value. Use effective_min_val here
+            range_idx = (int(val) - effective_min_val) // calculated_range_size # Integer division
+            # Ensure range_idx stays within limits of calculated_num_ranges
             range_idx = max(0, min(range_idx, calculated_num_ranges - 1))
-
-            current_range_start = min_val + range_idx * calculated_range_size
+            current_range_start = effective_min_val + range_idx * calculated_range_size
             current_range_end = current_range_start + calculated_range_size - 1
-            
             # Adjust the very last range's end to match max_val if needed
-            if range_idx == calculated_num_ranges - 1:
-                current_range_end = max_val
+            if range_idx == calculated_num_ranges - 1 and current_range_end > max_val:
+                 current_range_end = max_val
 
             if only_start:
                 new_column_values.append(current_range_start)
@@ -122,23 +130,14 @@ def add_integer_range_column(self, base_column: str, new_column_name: Optional[s
         if only_start:
             new_col_arrow_array = pa.array(new_column_values, type=pa.int64())
         else:
-            # For list of lists, PyArrow needs a ListArray type.
-            # Ensure all sublists are of length 2 and type is consistent.
-            # Use pa.list_() to define the list type.
-            new_col_arrow_array = pa.array(new_column_values, type=pa.list_(pa.int64())) # pa.list_() handles variable length, but here it's fixed at 2
+            new_col_arrow_array = pa.array(new_column_values, type=pa.list_(pa.int64()))
 
         # Create a temporary PyArrow Table for the new column
         new_col_arrow_table = pa.table({new_column_name: new_col_arrow_array})
-
-        if verbose:
-            print(f"4: add_integer_range_column: Generated new column data as Arrow Table.", file=sys.stderr)
-
         # Add the new column using the existing add_column method
-        # add_column expects a DuckDBPyRelation or other types it can convert.
-        # self.cx.from_arrow() converts the PyArrow Table to a DuckDBPyRelation.
         self.add_column(self.cx.from_arrow(new_col_arrow_table), new_column_name)
         if verbose:
-            print(f"5: add_integer_range_column: New column '{new_column_name}' added.", file=sys.stderr)
+            print(f"add_integer_range_column: New column '{new_column_name}' added.", file=sys.stderr)
 
         return self
 
@@ -148,6 +147,112 @@ def add_integer_range_column(self, base_column: str, new_column_name: Optional[s
         raise e  # Re-raise the exception to propagate it.
 
     finally:
+        pass
+    return self
+    
+def add_age_range_column(self, base_column: str, new_column_name: Optional[str] = None,
+                         min_age: Optional[Union[int, float]] = None, only_adult: bool = False,
+                         num_ranges: Optional[int] = None, range_size: Optional[int] = None,
+                         only_start: bool = False, verbose: bool = False) -> CS:
+    """
+    Adds a new column containing age range values based on a base column.
+    Optionally filters data to include only 'adult' rows (>= min_age).
+
+    Args:
+        base_column: The name of the numeric column containing age values.
+        new_column_name: The name of the new column. If None, defaults to
+                         "age_range_{base_column}".
+        min_age: Optional. If provided, this value will be used as:
+                 1. The filtering threshold if `only_adult` is True.
+                 2. The absolute minimum for range calculation (min_range_start).
+        only_adult: If True, rows with `base_column` values less than `min_age`
+                    will be removed from the .data member. This requires `min_age` to be set.
+        num_ranges: The desired number of ranges to create (passed to add_integer_range_column).
+        range_size: The desired size of each range (passed to add_integer_range_column).
+                    Exactly one of 'num_ranges' or 'range_size' must be provided.
+        only_start: If True, the new column will contain only the integer start of each range.
+                    If False, it will contain a list [range_start, range_end].
+        verbose: If True, print debug information.
+
+    Returns:
+        a new version of the CS object
+    """
+    if self.data is None:
+        raise ValueError("No data loaded in the CS object.")
+
+    # Validate base column name
+    valid_columns = [col.lower() for col in self.data.columns]
+    if base_column.lower() not in valid_columns:
+        raise ValueError(f"Column '{base_column}' not found in the data.")
+
+    if new_column_name is None:
+        new_column_name = f"age_range_{base_column}"
+
+    if not isinstance(new_column_name, str):
+        raise TypeError("new_column_name must be a string")
+    if not new_column_name.isidentifier():
+        raise ValueError("new_column_name must be a valid identifier (e.g., no spaces or special characters).")
+
+    # Validate min_age if provided
+    if min_age is not None and not isinstance(min_age, (int, float)):
+        raise TypeError("'min_age' must be an int or float if provided.")
+    if only_adult and min_age is None:
+        raise ValueError("If 'only_adult' is True, 'min_age' must be provided.")
+
+    # Determine min_range_start to pass to add_integer_range_column
+    min_range_start_for_int_range = min_age
+
+    try:
+        # Handle 'only_adult' filtering if parameter given
+        if only_adult:
+            if verbose:
+                print(f"add_age_range_column: Filtering data for only_adult (>= {min_age}).", file=sys.stderr)
+            
+            # Create a temporary table with filtered data
+            temp_filtered_table_name = f"_temp_filtered_age_data_{id(self)}"
+            filter_sql = f"""
+                CREATE TABLE "{temp_filtered_table_name}" AS
+                SELECT * FROM "{self._tablename}" WHERE "{base_column}" >= {min_age};
+            """
+            self.cx.execute(filter_sql)
+
+            # Drop the current table and rename the temporary one
+            self.cx.execute(f"DROP TABLE IF EXISTS \"{self._tablename}\";")
+            self.cx.execute(f"ALTER TABLE \"{temp_filtered_table_name}\" RENAME TO \"{self._tablename}\";")
+            
+            # Update self.data to point to the newly filtered and renamed table
+            self.data = self.cx.table(self._tablename)
+            
+            if verbose:
+                row_count = self.cx.execute(f'SELECT COUNT(*) FROM \"{self._tablename}\"').fetchone()[0]
+                print(f"add_age_range_column: Data filtered. New row count: {row_count}", file=sys.stderr)
+            
+            # If data is filtered, the min_range_start for the range calculation should be min_age
+            # as all values below it are now removed.
+            min_range_start_for_int_range = min_age
+
+        # Add the age range column
+        self.add_integer_range_column(
+            base_column=base_column,
+            new_column_name=new_column_name,
+            num_ranges=num_ranges,
+            range_size=range_size,
+            only_start=only_start,
+            min_range_start=min_range_start_for_int_range, # Pass the determined min_range_start
+            verbose=verbose
+        )
         if verbose:
-            print("6: add_integer_range_column: End", file=sys.stderr)
+            print(f"add_age_range_column: Age range column '{new_column_name}' added.", file=sys.stderr)
+
+        return self
+
+    except Exception as e:
+        if verbose:
+            print(f"Error in add_age_range_column for column '{base_column}': {e}", file=sys.stderr)
+        # No specific cleanup needed here for temporary tables as they are either renamed or dropped
+        # by the logic above or by add_integer_range_column.
+        raise e # Re-raise the original exception
+
+    finally:
+        pass
     return self
