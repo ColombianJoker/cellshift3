@@ -379,3 +379,159 @@ def gaussian_column(self, column_name: str, verbose: bool = False) -> CS:
         pass
         # print(f"gaussian_column: End for column '{column_name}'.", file=sys.stderr)
     return self
+    
+def impulse_column(self, column_name: str,
+                   sample_pct: Optional[float] = None, n_samples: Optional[int] = None,
+                   impulse_mag: Optional[Union[int, float]] = None, impulse_pct: Optional[float] = None,
+                   verbose: bool = False) -> CS:
+    """
+    Applies impulse noise to a specified column, replacing its original values.
+
+    Args:
+        column_name: The name of the column to apply noise to and replace.
+        sample_pct: Percent of column values to be altered by noise (0 < sample_pct < 100).
+        n_samples: Absolute number of column values to be altered by noise (positive integer).
+        impulse_mag: Max absolute magnitude of impulse noise to be applied (non-negative).
+        impulse_pct: Percent of the maximum absolute value in the base column to be applied as impulse noise (0 < impulse_pct <= 100).
+        verbose: If True, print debug information.
+
+    Returns:
+        a new version of the CS object
+    """
+    if verbose:
+        print(f"1: impulse_column: Start for column '{column_name}'", file=sys.stderr)
+    
+    # Validate column_name exists
+    if self.data is None:
+        raise ValueError("No data loaded in the CS object.")
+    valid_columns = [col.lower() for col in self.data.columns]
+    if column_name.lower() not in valid_columns:
+        raise ValueError(f"Column '{column_name}' not found in the data.")
+
+    # Define the name for the temporary noise column
+    temp_noise_column_name = f"noised_impulse_{column_name}"
+
+    try:
+        # Step 1: Create a new column with impulse noise
+        if verbose:
+            print(f"2: impulse_column: Adding temporary impulse noise column '{temp_noise_column_name}'.", file=sys.stderr)
+        self.add_impulse_noise_column(
+            base_column=column_name,
+            new_column_name=temp_noise_column_name,
+            sample_pct=sample_pct,
+            n_samples=n_samples,
+            impulse_mag=impulse_mag,
+            impulse_pct=impulse_pct, # Pass impulse_pct
+            verbose=verbose
+        )
+        if verbose:
+            print(f"3: impulse_column: Temporary impulse noise column '{temp_noise_column_name}' added.", file=sys.stderr)
+
+        # Step 2: Replace the original column with the noise column
+        if verbose:
+            print(f"4: impulse_column: Replacing '{column_name}' with '{temp_noise_column_name}'.", file=sys.stderr)
+        self.replace_column(
+            column_to_replace=column_name,
+            replace_column=temp_noise_column_name
+        )
+        if verbose:
+            print(f"5: impulse_column: Column '{column_name}' replaced.", file=sys.stderr)
+
+        # Step 3: Remove the temporary noise column
+        if verbose:
+            print(f"6: impulse_column: Dropping temporary impulse noise column '{temp_noise_column_name}'.", file=sys.stderr)
+        self.drop_column(temp_noise_column_name)
+        if verbose:
+            print(f"7: impulse_column: Temporary impulse noise column '{temp_noise_column_name}' dropped.", file=sys.stderr)
+
+        return self
+
+    except Exception as e:
+        if verbose:
+            print(f"Error in impulse_column for column '{column_name}': {e}", file=sys.stderr)
+        # Attempt to clean up the temporary column if an error occurred before dropping it
+        try:
+            # Check if the temporary column exists before trying to drop it
+            # Note: `drop_column` handles non-existent columns gracefully, so a direct call is fine.
+            self.drop_column(temp_noise_column_name)
+            if verbose:
+                print(f"Cleaned up temporary column '{temp_noise_column_name}' due to error.", file=sys.stderr)
+        except Exception as cleanup_e:
+            if verbose:
+                print(f"Error during cleanup of temporary column '{temp_noise_column_name}': {cleanup_e}", file=sys.stderr)
+        raise e # Re-raise the original exception
+
+    finally:
+        if verbose:
+            print(f"8: impulse_column: End for column '{column_name}'.", file=sys.stderr)
+    return self
+
+def salt_pepper_column(self, column_name: str,
+                       sample_pct: Optional[float] = None, n_samples: Optional[int] = None,
+                       verbose: bool = False) -> CS:
+    """
+    Applies salt-and-pepper noise to a specified column, replacing its original values.
+
+    Args:
+        column_name: The name of the column to apply noise to and replace.
+        sample_pct: Percent of column values to be altered by noise (0 < sample_pct < 100).
+        n_samples: Absolute number of column values to be altered by noise (positive integer).
+        verbose: If True, print debug information.
+
+    Returns:
+        a new version of the CS object
+    """
+    # Validate column_name exists
+    if self.data is None:
+        raise ValueError("No data loaded in the CS object.")
+    valid_columns = [col.lower() for col in self.data.columns]
+    if column_name.lower() not in valid_columns:
+        raise ValueError(f"Column '{column_name}' not found in the data.")
+
+    # Define the name for the temporary noise column
+    temp_noise_column_name = f"noised_salt_pepper_{column_name}"
+
+    try:
+        # Create a new column with salt-and-pepper noise
+        self.add_salt_pepper_noise_column(
+            base_column=column_name,
+            new_column_name=temp_noise_column_name,
+            sample_pct=sample_pct,
+            n_samples=n_samples,
+            verbose=verbose
+        )
+        if verbose:
+            print(f"salt_pepper_column: Temporary salt-and-pepper noise column '{temp_noise_column_name}' added.", file=sys.stderr)
+
+        # Replace the original column with the noise column
+        self.replace_column(
+            column_to_replace=column_name,
+            replace_column=temp_noise_column_name
+        )
+        if verbose:
+            print(f"salt_pepper_column: Column '{column_name}' replaced.", file=sys.stderr)
+
+        # Remove the temporary noise column
+        self.drop_column(temp_noise_column_name)
+        if verbose:
+            print(f"salt_pepper_column: Temporary noise column '{temp_noise_column_name}' dropped.", file=sys.stderr)
+
+        return self
+
+    except Exception as e:
+        if verbose:
+            print(f"Error in salt_pepper_column for column '{column_name}': {e}", file=sys.stderr)
+        # Attempt to clean up the temporary column if an error occurred before dropping it
+        try:
+            # drop_column handles non-existent columns gracefully, so a direct call is fine.
+            self.drop_column(temp_noise_column_name)
+            if verbose:
+                print(f"Cleaned up temporary column '{temp_noise_column_name}' due to error.", file=sys.stderr)
+        except Exception as cleanup_e:
+            if verbose:
+                print(f"Error during cleanup of temporary column '{temp_noise_column_name}': {cleanup_e}", file=sys.stderr)
+        raise e # Re-raise the original exception
+
+    finally:
+        pass
+    return self

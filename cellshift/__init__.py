@@ -191,7 +191,7 @@ from .columns import set_type, add_column, drop_column, replace_column
 from .auxiliary import letters_for, random_code, generate_kb_code, generate_mb_code, get_file_size
 from .destroy import fast_overwrite, destroy
 from .noise import add_gaussian_noise_column, add_impulse_noise_column, add_salt_pepper_noise_column
-from .noise import gaussian_column
+from .noise import gaussian_column, impulse_column, salt_pepper_column
 
 CS.set_type = set_type
 CS.add_column = add_column
@@ -201,3 +201,6 @@ CS.add_gaussian_noise_column = add_gaussian_noise_column
 CS.add_impulse_noise_column = add_impulse_noise_column
 CS.add_salt_pepper_noise_column = add_salt_pepper_noise_column
 CS.gaussian_column = gaussian_column
+CS.impulse_column = impulse_column
+CS.salt_pepper_column = salt_pepper_column
+
