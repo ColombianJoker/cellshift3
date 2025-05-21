@@ -198,3 +198,120 @@ def add_impulse_noise_column(self, base_column: str, new_column_name: Optional[s
         pass
         # print("7: add_impulse_noise_column: End", file=sys.stderr)
     return self
+    
+def add_salt_pepper_noise_column(self, base_column: str, new_column_name: Optional[str] = None,
+                                 sample_pct: Optional[float] = None, n_samples: Optional[int] = None,
+                                 verbose: bool = False) -> CS:
+    """
+    Adds a new column containing salt-and-pepper noise to the CS object's data.
+    Selected values in the new column will be set to the min or max of the base column.
+
+    Args:
+        base_column: The name of the column to use for calculating min/max values.
+        new_column_name: The name of the new column. If None, defaults to "salt_pepper_noise_{base_column}".
+        sample_pct: Percent of column values to be altered by noise (0 < sample_pct < 100).
+        n_samples: Absolute number of column values to be altered by noise (positive integer).
+        verbose: If True, print debug information.
+
+    Returns:
+        a new version of the CS object
+    """
+    if self.data is None:
+        raise ValueError("No data loaded in the CS object.")
+
+    # Validate base column name
+    valid_columns = [col.lower() for col in self.data.columns]
+    if base_column.lower() not in valid_columns:
+        raise ValueError(f"Column '{base_column}' not found in the data.")
+
+    if new_column_name is None:
+        new_column_name = f"salt_pepper_noise_{base_column}"
+
+    if not isinstance(new_column_name, str):
+        raise TypeError("new_column_name must be a string")
+    if not new_column_name.isidentifier():
+        raise ValueError("new_column_name must be a valid identifier (e.g., no spaces or special characters).")
+
+    # Validate sample parameters
+    if not (sample_pct is not None or n_samples is not None):
+        raise ValueError("Either 'sample_pct' or 'n_samples' must be provided.")
+    if sample_pct is not None and not (0 < sample_pct < 100):
+        raise ValueError("'sample_pct' must be between 0 and 100 (exclusive).")
+    if n_samples is not None and n_samples <= 0:
+        raise ValueError("'n_samples' must be a positive integer.")
+
+    # Get total rows
+    count_sql = f"SELECT COUNT(*) FROM \"{self._tablename}\"" # Use _tablename as it's the current state
+    total_rows = self.cx.execute(count_sql).fetchone()[0]
+    if total_rows == 0:
+        # print("add_salt_pepper_noise_column: No rows in base table, skipping noise addition.", file=sys.stderr)
+        return self
+
+    # Calculate n_samples to alter
+    num_samples_to_alter = 0
+    if n_samples is not None:
+        if n_samples > total_rows:
+            raise ValueError(f"'n_samples' ({n_samples}) cannot be greater than total rows ({total_rows}).")
+        num_samples_to_alter = n_samples
+    elif sample_pct is not None:
+        num_samples_to_alter = max(1, int((sample_pct * total_rows) / 100))
+
+    if num_samples_to_alter == 0:
+        # print("add_salt_pepper_noise_column: No samples to alter, skipping noise addition.", file=sys.stderr)
+        return self
+
+    # Get min and max values of the base column
+    min_max_sql = f"SELECT MIN(\"{base_column}\"), MAX(\"{base_column}\") FROM \"{self._tablename}\""
+    min_val, max_val = self.cx.execute(min_max_sql).fetchone()
+    
+    if min_val is None or max_val is None:
+        raise ValueError(f"Could not calculate MIN/MAX for column '{base_column}'. Is it all NULLs or non-numeric?")
+    
+    # Ensure min_val and max_val are floats for consistency with noise
+    min_val = float(min_val)
+    max_val = float(max_val)
+
+    try:
+        # Add the new column to the table with a DOUBLE type
+        # print(f"add_salt_pepper_noise_column: Adding column '{new_column_name}' as DOUBLE.", file=sys.stderr)
+        self.cx.execute(f"ALTER TABLE \"{self._tablename}\" ADD COLUMN \"{new_column_name}\" DOUBLE;")
+        
+        # Initialize the new column with values from the base_column
+        # print(f"add_salt_pepper_noise_column: Initializing '{new_column_name}' with '{base_column}' values.", file=sys.stderr)
+        self.cx.execute(f"UPDATE \"{self._tablename}\" SET \"{new_column_name}\" = \"{base_column}\";")
+
+        # Update self.data to reflect the new schema
+        self.data = self.cx.table(self._tablename)
+
+        # Generate random row IDs for alteration
+        random_row_ids = np.random.choice(total_rows, size=num_samples_to_alter, replace=False)
+        # print(f"add_salt_pepper_noise_column: Applying salt-and-pepper noise to {num_samples_to_alter} samples.", file=sys.stderr)
+        # Apply salt-and-pepper noise via individual UPDATE statements
+        # Use tqdm for progress if verbose is True
+        for i in tqdm(range(num_samples_to_alter), disable=not verbose, desc="Applying salt-and-pepper noise"):
+            row_id = random_row_ids[i]
+            # Randomly choose between min_val (pepper) and max_val (salt)
+            noise_val = np.random.choice([min_val, max_val])
+            
+            update_sql = f"""
+                UPDATE \"{self._tablename}\"
+                SET \"{new_column_name}\" = {noise_val}
+                WHERE rowid = {row_id};
+            """
+            self.cx.execute(update_sql)
+        
+        # 5. Update self.data one last time after all updates are done
+        self.data = self.cx.table(self._tablename)
+        # print(f"add_salt_pepper_noise_column: Column '{new_column_name}' updated with salt-and-pepper noise.", file=sys.stderr)
+
+        return self
+
+    except Exception as e:
+        print(f"Error in add_salt_pepper_noise_column: {e}", file=sys.stderr)
+        raise e  # Re-raise the exception to propagate it.
+
+    finally:
+        pass
+        # print("add_salt_pepper_noise_column: End", file=sys.stderr)
+        
+    return self
