@@ -273,11 +273,9 @@ def add_salt_pepper_noise_column(self, base_column: str, new_column_name: Option
 
     try:
         # Add the new column to the table with a DOUBLE type
-        # print(f"add_salt_pepper_noise_column: Adding column '{new_column_name}' as DOUBLE.", file=sys.stderr)
         self.cx.execute(f"ALTER TABLE \"{self._tablename}\" ADD COLUMN \"{new_column_name}\" DOUBLE;")
         
         # Initialize the new column with values from the base_column
-        # print(f"add_salt_pepper_noise_column: Initializing '{new_column_name}' with '{base_column}' values.", file=sys.stderr)
         self.cx.execute(f"UPDATE \"{self._tablename}\" SET \"{new_column_name}\" = \"{base_column}\";")
 
         # Update self.data to reflect the new schema
@@ -285,7 +283,6 @@ def add_salt_pepper_noise_column(self, base_column: str, new_column_name: Option
 
         # Generate random row IDs for alteration
         random_row_ids = np.random.choice(total_rows, size=num_samples_to_alter, replace=False)
-        # print(f"add_salt_pepper_noise_column: Applying salt-and-pepper noise to {num_samples_to_alter} samples.", file=sys.stderr)
         # Apply salt-and-pepper noise via individual UPDATE statements
         # Use tqdm for progress if verbose is True
         for i in tqdm(range(num_samples_to_alter), disable=not verbose, desc="Applying salt-and-pepper noise"):
@@ -300,7 +297,7 @@ def add_salt_pepper_noise_column(self, base_column: str, new_column_name: Option
             """
             self.cx.execute(update_sql)
         
-        # 5. Update self.data one last time after all updates are done
+        # Update self.data one last time after all updates are done
         self.data = self.cx.table(self._tablename)
         # print(f"add_salt_pepper_noise_column: Column '{new_column_name}' updated with salt-and-pepper noise.", file=sys.stderr)
 
@@ -398,9 +395,6 @@ def impulse_column(self, column_name: str,
     Returns:
         a new version of the CS object
     """
-    if verbose:
-        print(f"1: impulse_column: Start for column '{column_name}'", file=sys.stderr)
-    
     # Validate column_name exists
     if self.data is None:
         raise ValueError("No data loaded in the CS object.")
@@ -412,9 +406,9 @@ def impulse_column(self, column_name: str,
     temp_noise_column_name = f"noised_impulse_{column_name}"
 
     try:
-        # Step 1: Create a new column with impulse noise
+        # Create a new column with impulse noise
         if verbose:
-            print(f"2: impulse_column: Adding temporary impulse noise column '{temp_noise_column_name}'.", file=sys.stderr)
+            print(f"impulse_column: Adding temporary impulse noise column '{temp_noise_column_name}'.", file=sys.stderr)
         self.add_impulse_noise_column(
             base_column=column_name,
             new_column_name=temp_noise_column_name,
@@ -425,24 +419,20 @@ def impulse_column(self, column_name: str,
             verbose=verbose
         )
         if verbose:
-            print(f"3: impulse_column: Temporary impulse noise column '{temp_noise_column_name}' added.", file=sys.stderr)
+            print(f"impulse_column: Temporary impulse noise column '{temp_noise_column_name}' added.", file=sys.stderr)
 
-        # Step 2: Replace the original column with the noise column
-        if verbose:
-            print(f"4: impulse_column: Replacing '{column_name}' with '{temp_noise_column_name}'.", file=sys.stderr)
+        # Replace the original column with the noise column
         self.replace_column(
             column_to_replace=column_name,
             replace_column=temp_noise_column_name
         )
         if verbose:
-            print(f"5: impulse_column: Column '{column_name}' replaced.", file=sys.stderr)
+            print(f"impulse_column: Column '{column_name}' replaced.", file=sys.stderr)
 
-        # Step 3: Remove the temporary noise column
-        if verbose:
-            print(f"6: impulse_column: Dropping temporary impulse noise column '{temp_noise_column_name}'.", file=sys.stderr)
+        # Remove the temporary noise column
         self.drop_column(temp_noise_column_name)
         if verbose:
-            print(f"7: impulse_column: Temporary impulse noise column '{temp_noise_column_name}' dropped.", file=sys.stderr)
+            print(f"impulse_column: Temporary impulse noise column '{temp_noise_column_name}' dropped.", file=sys.stderr)
 
         return self
 
@@ -463,7 +453,7 @@ def impulse_column(self, column_name: str,
 
     finally:
         if verbose:
-            print(f"8: impulse_column: End for column '{column_name}'.", file=sys.stderr)
+            print(f"impulse_column: End for column '{column_name}'.", file=sys.stderr)
     return self
 
 def salt_pepper_column(self, column_name: str,

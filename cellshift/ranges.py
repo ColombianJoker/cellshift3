@@ -164,9 +164,10 @@ def add_age_range_column(self, base_column: str, new_column_name: Optional[str] 
                          "age_range_{base_column}".
         min_age: Optional. If provided, this value will be used as:
                  1. The filtering threshold if `only_adult` is True.
-                 2. The absolute minimum for range calculation (min_range_start).
+                 2. The absolute minimum for range calculation (min_range_start) in add_integer_range_column.
         only_adult: If True, rows with `base_column` values less than `min_age`
-                    will be removed from the .data member. This requires `min_age` to be set.
+                    will be removed from the .data member *after* the range column is added.
+                    This requires `min_age` to be set.
         num_ranges: The desired number of ranges to create (passed to add_integer_range_column).
         range_size: The desired size of each range (passed to add_integer_range_column).
                     Exactly one of 'num_ranges' or 'range_size' must be provided.
@@ -175,7 +176,7 @@ def add_age_range_column(self, base_column: str, new_column_name: Optional[str] 
         verbose: If True, print debug information.
 
     Returns:
-        a new version of the CS object
+        self: The CS object with the added age range column (and potentially filtered data).
     """
     if self.data is None:
         raise ValueError("No data loaded in the CS object.")
@@ -200,38 +201,14 @@ def add_age_range_column(self, base_column: str, new_column_name: Optional[str] 
         raise ValueError("If 'only_adult' is True, 'min_age' must be provided.")
 
     # Determine min_range_start to pass to add_integer_range_column
-    min_range_start_for_int_range = min_age
+    # This will be used for the range calculation itself, regardless of filtering
+    min_range_start_for_int_range = min_age # Pass min_age directly as min_range_start
 
     try:
-        # Handle 'only_adult' filtering if parameter given
-        if only_adult:
-            if verbose:
-                print(f"add_age_range_column: Filtering data for only_adult (>= {min_age}).", file=sys.stderr)
-            
-            # Create a temporary table with filtered data
-            temp_filtered_table_name = f"_temp_filtered_age_data_{id(self)}"
-            filter_sql = f"""
-                CREATE TABLE "{temp_filtered_table_name}" AS
-                SELECT * FROM "{self._tablename}" WHERE "{base_column}" >= {min_age};
-            """
-            self.cx.execute(filter_sql)
-
-            # Drop the current table and rename the temporary one
-            self.cx.execute(f"DROP TABLE IF EXISTS \"{self._tablename}\";")
-            self.cx.execute(f"ALTER TABLE \"{temp_filtered_table_name}\" RENAME TO \"{self._tablename}\";")
-            
-            # Update self.data to point to the newly filtered and renamed table
-            self.data = self.cx.table(self._tablename)
-            
-            if verbose:
-                row_count = self.cx.execute(f'SELECT COUNT(*) FROM \"{self._tablename}\"').fetchone()[0]
-                print(f"add_age_range_column: Data filtered. New row count: {row_count}", file=sys.stderr)
-            
-            # If data is filtered, the min_range_start for the range calculation should be min_age
-            # as all values below it are now removed.
-            min_range_start_for_int_range = min_age
-
-        # Add the age range column
+        # Step 1: Call add_integer_range_column to add the age range column to the *current* data
+        if verbose:
+            print(f"add_age_range_column: Calling add_integer_range_column to add '{new_column_name}'.", file=sys.stderr)
+        
         self.add_integer_range_column(
             base_column=base_column,
             new_column_name=new_column_name,
@@ -244,14 +221,34 @@ def add_age_range_column(self, base_column: str, new_column_name: Optional[str] 
         if verbose:
             print(f"add_age_range_column: Age range column '{new_column_name}' added.", file=sys.stderr)
 
+        # Step 2: Handle 'only_adult' filtering if requested (after column addition)
+        if only_adult:
+            if verbose:
+                print(f"add_age_range_column: Filtering data for only_adult (>= {min_age}).", file=sys.stderr)
+            
+            # Create a new relation with filtered data
+            # Use self._tablename as it now contains the newly added range column
+            sql_filter = f"SELECT * FROM \"{self._tablename}\" WHERE \"{base_column}\" >= {min_age};"
+            filtered_data = self.cx.execute(sql_filter).fetch_arrow_table()
+            # Drop the current table and materialize the filtered relation into it
+            sql_drop = f"DROP TABLE IF EXISTS \"{self._tablename}\";"
+            self.cx.execute(sql_drop)
+            # Create new table from filtered data
+            sql_create = f"CREATE TABLE IF NOT EXISTS \"{self._tablename}\" AS SELECT * FROM filtered_data;"
+            self.cx.execute(sql_create)
+            # Update self.data to point to the newly filtered table
+            self.data = self.cx.table(self._tablename)
+            
+            if verbose:
+                new_row_count = self.cx.execute(f'SELECT COUNT(*) FROM \"{self._tablename}\"').fetchone()[0]
+                print(f"add_age_range_column: Data filtered. New row count: {new_row_count}", file=sys.stderr)
+            
         return self
 
     except Exception as e:
         if verbose:
             print(f"Error in add_age_range_column for column '{base_column}': {e}", file=sys.stderr)
-        # No specific cleanup needed here for temporary tables as they are either renamed or dropped
-        # by the logic above or by add_integer_range_column.
-        raise e # Re-raise the original exception
+        raise e # Re-raise the exception to propagate it.
 
     finally:
         pass
@@ -487,3 +484,96 @@ def integer_range_column(self, base_column: str,
     finally:
         pass
     return self
+
+def age_range_column(self, base_column: str,
+                     min_age: Optional[Union[int, float]] = None, only_adult: bool = False,
+                     num_ranges: Optional[int] = None, range_size: Optional[int] = None,
+                     only_start: bool = False, verbose: bool = False) -> CS:
+    """
+    Replaces an existing column with a new column containing age range values.
+    Optionally filters data to include only 'adult' rows (>= min_age).
+
+    Args:
+        base_column: The name of the column to replace with age range values.
+        min_age: Optional. If provided, this value will be used as:
+                 1. The filtering threshold if `only_adult` is True.
+                 2. The absolute minimum for range calculation (min_range_start).
+        only_adult: If True, rows with `base_column` values less than `min_age`
+                    will be removed from the .data member. This requires `min_age` to be set.
+        num_ranges: The desired number of ranges to create.
+        range_size: The desired size of each range.
+                    Exactly one of 'num_ranges' or 'range_size' must be provided.
+        only_start: If True, the new column will contain only the integer start of each range.
+                    If False, it will contain a list [range_start, range_end].
+        verbose: If True, print debug information.
+
+    Returns:
+        a new version of the CS object
+    """
+    if verbose:
+        print(f"1: age_range_column: Start for column '{base_column}'", file=sys.stderr)
+    
+    # Validate base_column exists
+    if self.data is None:
+        raise ValueError("No data loaded in the CS object.")
+    valid_columns = [col.lower() for col in self.data.columns]
+    if base_column.lower() not in valid_columns:
+        raise ValueError(f"Column '{base_column}' not found in the data.")
+
+    # Define the name for the temporary range column
+    temp_range_column_name = f"range_age_{base_column}" # More specific temporary name
+
+    try:
+        # Step 1: Create a new temporary column with age range values
+        if verbose:
+            print(f"2: age_range_column: Adding temporary age range column '{temp_range_column_name}'.", file=sys.stderr)
+        self.add_age_range_column(
+            base_column=base_column,
+            new_column_name=temp_range_column_name,
+            min_age=min_age,
+            only_adult=only_adult,
+            num_ranges=num_ranges,
+            range_size=range_size,
+            only_start=only_start,
+            verbose=verbose
+        )
+        if verbose:
+            print(f"3: age_range_column: Temporary age range column '{temp_range_column_name}' added.", file=sys.stderr)
+
+        # Step 2: Replace the original column with the new range column
+        # DuckDB's replace_column (via CREATE TABLE AS SELECT) handles type changes.
+        if verbose:
+            print(f"4: age_range_column: Replacing '{base_column}' with '{temp_range_column_name}'.", file=sys.stderr)
+        self.replace_column(
+            column_to_replace=base_column,
+            replace_column=temp_range_column_name
+        )
+        if verbose:
+            print(f"5: age_range_column: Column '{base_column}' replaced.", file=sys.stderr)
+
+        # Step 3: Remove the temporary range column
+        if verbose:
+            print(f"6: age_range_column: Dropping temporary range column '{temp_range_column_name}'.", file=sys.stderr)
+        self.drop_column(temp_range_column_name)
+        if verbose:
+            print(f"7: age_range_column: Temporary range column '{temp_range_column_name}' dropped.", file=sys.stderr)
+
+        return self
+
+    except Exception as e:
+        if verbose:
+            print(f"Error in age_range_column for column '{base_column}': {e}", file=sys.stderr)
+        # Attempt to clean up the temporary column if an error occurred before dropping it
+        try:
+            # drop_column handles non-existent columns gracefully, so a direct call is fine.
+            self.drop_column(temp_range_column_name)
+            if verbose:
+                print(f"Cleaned up temporary column '{temp_range_column_name}' due to error.", file=sys.stderr)
+        except Exception as cleanup_e:
+            if verbose:
+                print(f"Error during cleanup of temporary column '{temp_range_column_name}': {cleanup_e}", file=sys.stderr)
+        raise e # Re-raise the original exception
+
+    finally:
+        if verbose:
+            print(f"8: age_range_column: End for column '{base_column}'.", file=sys.stderr)
