@@ -7,8 +7,7 @@ import string
 
 def letters_for(n_digits: int) -> str:
   """
-  Calculates the minimum number of latin letters needed to represent a number of n digits.
-  Ex: 3 letter for 4 digits
+  Calculates the minimum number of latin letters needed to represent a number of n digits. Ex: 3 letter for 4 digits
   
   Args:
       n_digits: A number (integer) of digits

@@ -2,8 +2,8 @@
 from typing import Union, Optional
 import pandas as pd
 import duckdb
+# from duckdb import DuckDBPyConnection
 import polars as pl
-from duckdb import DuckDBPyConnection
 import sys
 
 # Define global variables for the table name generator
@@ -26,7 +26,9 @@ class CS:
     CSV/DuckDB.  A single DuckDB connection is maintained for the
     lifetime of the object.
     """
-    def __init__(self, input_data: Union[str, pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame], db_path: str = ':memory:'):
+    def __init__(self, 
+                 input_data: Union[str, pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame], 
+                 db_path: str = ':memory:'):
         """
         Initializes the CS instance.
 
@@ -43,7 +45,8 @@ class CS:
         if self.data is not None:  # Add this check
             self.data = self.cx.table(self._original_tablename) # force a named relation
 
-    def _load_data(self, data: Union[str, pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame]) -> Optional[duckdb.DuckDBPyRelation]:
+    def _load_data(self, 
+                   data: Union[str, pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame]) -> Optional[duckdb.DuckDBPyRelation]:
         """
         Internal method to load data and return a DuckDB relation or None.
         Uses the object's connection (self.cx).
@@ -194,6 +197,7 @@ from .noise import add_gaussian_noise_column, add_impulse_noise_column, add_salt
 from .noise import gaussian_column, impulse_column, salt_pepper_column
 from .ranges import add_integer_range_column, add_age_range_column, add_float_range_column
 from .ranges import integer_range_column, age_range_column, float_range_column
+from .synthetic import add_syn_date_column
 
 CS.set_type = set_type
 CS.add_column = add_column
@@ -211,3 +215,4 @@ CS.add_float_range_column = add_float_range_column
 CS.integer_range_column = integer_range_column
 CS.age_range_column = age_range_column
 CS.float_range_column = float_range_column
+CS.add_syn_date_column = add_syn_date_column

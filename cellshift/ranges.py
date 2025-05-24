@@ -1,16 +1,20 @@
 import duckdb
 import numpy as np
 import pyarrow as pa
-import pandas as pd
+# import pandas as pd
 # import polars as pl
 from tqdm import tqdm
 from typing import Generator, Union, Optional
 import sys
 from . import CS  # Import CS from the main module to be able to return self with typing
 
-def add_integer_range_column(self, base_column: str, new_column_name: Optional[str] = None,
-                             num_ranges: Optional[int] = None, range_size: Optional[int] = None,
-                             only_start: bool = False, min_range_start: Optional[Union[int, float]] = None,
+def add_integer_range_column(self,
+                             base_column: str, 
+                             new_column_name: Optional[str] = None,
+                             num_ranges: Optional[int] = None, 
+                             range_size: Optional[int] = None,
+                             only_start: bool = False, 
+                             min_range_start: Optional[Union[int, float]] = None,
                              verbose: bool = False) -> CS:
     """
     Adds a new column containing integer range values based on a base column's min/max.
@@ -150,10 +154,14 @@ def add_integer_range_column(self, base_column: str, new_column_name: Optional[s
         pass
     return self
     
-def add_age_range_column(self, base_column: str, new_column_name: Optional[str] = None,
-                         min_age: Optional[Union[int, float]] = None, only_adult: bool = False,
-                         num_ranges: Optional[int] = None, range_size: Optional[int] = None,
-                         only_start: bool = False, verbose: bool = False) -> CS:
+def add_age_range_column(self, base_column: str, 
+                         new_column_name: Optional[str] = None,
+                         min_age: Optional[Union[int, float]] = None, 
+                         only_adult: bool = False,
+                         num_ranges: Optional[int] = None, 
+                         range_size: Optional[int] = None,
+                         only_start: bool = False, 
+                         verbose: bool = False) -> CS:
     """
     Adds a new column containing age range values based on a base column.
     Optionally filters data to include only 'adult' rows (>= min_age).
@@ -254,10 +262,14 @@ def add_age_range_column(self, base_column: str, new_column_name: Optional[str] 
         pass
     return self
 
-def add_float_range_column(self, base_column: str, new_column_name: Optional[str] = None,
-                           num_ranges: Optional[int] = None, range_size: Optional[Union[int, float]] = None,
-                           only_start: bool = False, min_range_start: Optional[Union[int, float]] = None,
-                           decimals: int = 1, verbose: bool = False) -> CS:
+def add_float_range_column(self, base_column: str, 
+                           new_column_name: Optional[str] = None,
+                           num_ranges: Optional[int] = None, 
+                           range_size: Optional[Union[int, float]] = None,
+                           only_start: bool = False, 
+                           min_range_start: Optional[Union[int, float]] = None,
+                           decimals: int = 1, 
+                           verbose: bool = False) -> CS:
     """
     Adds a new column containing floating-point range values based on a base column's min/max.
 
@@ -409,9 +421,12 @@ def add_float_range_column(self, base_column: str, new_column_name: Optional[str
         pass
     return self
     
-def integer_range_column(self, base_column: str, num_ranges: Optional[int] = None,
-                         range_size: Optional[int] = None, only_start: bool = False,
-                         min_range_start: Optional[Union[int, float]] = None, verbose: bool = False) -> CS:
+def integer_range_column(self, base_column: str, 
+                         num_ranges: Optional[int] = None,
+                         range_size: Optional[int] = None, 
+                         only_start: bool = False,
+                         min_range_start: Optional[Union[int, float]] = None, 
+                         verbose: bool = False) -> CS:
     """
     Replaces an existing column with a new column containing integer range values.
 
@@ -484,9 +499,14 @@ def integer_range_column(self, base_column: str, num_ranges: Optional[int] = Non
         pass
     return self
 
-def age_range_column(self, base_column: str, min_age: Optional[Union[int, float]] = None,
-                     only_adult: bool = False, num_ranges: Optional[int] = None,
-                     range_size: Optional[int] = None, only_start: bool = False, verbose: bool = False) -> CS:
+def age_range_column(self, 
+                     base_column: str, 
+                     min_age: Optional[Union[int, float]] = None,
+                     only_adult: bool = False, 
+                     num_ranges: Optional[int] = None,
+                     range_size: Optional[int] = None, 
+                     only_start: bool = False, 
+                     verbose: bool = False) -> CS:
     """
     Replaces an existing column with a new column containing age range values.
     Optionally filters data to include only 'adult' rows (>= min_age).
@@ -567,10 +587,14 @@ def age_range_column(self, base_column: str, min_age: Optional[Union[int, float]
         pass
     return self
 
-def float_range_column(self, base_column: str, num_ranges: Optional[int] = None,
+def float_range_column(self, 
+                       base_column: str, 
+                       num_ranges: Optional[int] = None,
                        range_size: Optional[Union[int, float]] = None,
-                       only_start: bool = False, min_range_start: Optional[Union[int, float]] = None,
-                       decimals: int = 1, verbose: bool = False) -> CS:
+                       only_start: bool = False, 
+                       min_range_start: Optional[Union[int, float]] = None,
+                       decimals: int = 1, 
+                       verbose: bool = False) -> CS:
     """
     Replaces an existing column with a new column containing floating-point range values.
 

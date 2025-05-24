@@ -9,7 +9,9 @@ from typing import Generator, Union, Optional, List, Tuple
 import sys
 from . import CS  # Import CS from the main module to be able to return self with typing
 
-def set_type(self, column_name: str, new_type: str) -> CS:
+def set_type(self, 
+             column_name: str, 
+             new_type: str) -> CS:
   """Set the type of a relation (table) column by casting and using the same name
   
   Args:
@@ -22,7 +24,9 @@ def set_type(self, column_name: str, new_type: str) -> CS:
   self.data = new_rel
   return self
 
-def add_column(self, column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series, np.ndarray, list, tuple, duckdb.DuckDBPyRelation, pa.Array], column_name: str) -> CS:
+def add_column(self, 
+               column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series, np.ndarray, list, tuple, duckdb.DuckDBPyRelation, pa.Array], 
+               column_name: str) -> CS:
     """
     Adds a column to the CS object's data using a positional join.
 
@@ -167,7 +171,9 @@ def drop_column(self, column_names: Union[str, List[str], Tuple[str]]) -> CS:
         pass
     return self
 
-def replace_column(self, column_to_replace: Union[str, List[str], Tuple[str]], replace_column: Union[str, List[str], Tuple[str]]) -> CS:
+def replace_column(self, 
+                   column_to_replace: Union[str, List[str], Tuple[str]], 
+                   replace_column: Union[str, List[str], Tuple[str]]) -> CS:
     """
     Replaces the contents of one or more columns with the data from another column or set of columns,
     preserving the original column order.

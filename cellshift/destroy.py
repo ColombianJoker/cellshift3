@@ -5,9 +5,8 @@ import mmap
 import os
 import sys
 from tqdm import tqdm
-from .auxiliary import get_file_size, generate_kb_code, generate_mb_code
 from typing import Union, Optional, List, Tuple
-
+from .auxiliary import get_file_size, generate_kb_code, generate_mb_code
 
 def fast_overwrite(filename: Union[str, List[str], Tuple[str]], verbose: bool = False) -> bool:
     """
