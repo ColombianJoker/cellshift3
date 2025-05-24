@@ -39,11 +39,12 @@ class CS:
         """
         self.db_path = db_path  # Store the database path
         self.cx: DuckDBPyConnection = duckdb.connect(database=self.db_path, read_only=False)  # Initialize connection once
-        self._tablename: str = next(_table_name_gen)  # Generate table name *before* loading
-        self._original_tablename: str = self._tablename # store original table name
+        self._tablename: str = next(_table_name_gen)            # Generate table name *before* loading
+        self._original_tablename: str = self._tablename         # store original table name
         self.data: Optional[duckdb.DuckDBPyRelation] = self._load_data(input_data)
-        if self.data is not None:  # Add this check
+        if self.data is not None:
             self.data = self.cx.table(self._original_tablename) # force a named relation
+        self._faker_locale: str = "es_CO"                       # Initialize with default 'Colombia'
 
     def _load_data(self, 
                    data: Union[str, pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame]) -> Optional[duckdb.DuckDBPyRelation]:
@@ -79,7 +80,7 @@ class CS:
 
     def to_pandas(self) -> Optional[pd.DataFrame]:
         """Retrieves the data as a Pandas DataFrame.
-      
+        
         Returns:
             the contents of .data member in Polars DataFrame format.
         """
@@ -90,7 +91,7 @@ class CS:
 
     def to_polars(self) -> Optional[pl.DataFrame]:
         """Retrieves the data as a Polars DataFrame.
-      
+        
         Returns:
             the contents of .data member in Polars DataFrame format.
         """
@@ -103,8 +104,8 @@ class CS:
         """Saves the data to a CSV file using DuckDB's SQL interface.
         
         Args:
-          filename: The name of the output CSV file.
-      
+            filename: The name of the output CSV file.
+        
         Returns:
             True on success, False on failure.
         """
@@ -162,7 +163,6 @@ class CS:
     def close_connection(self) -> None:
         """
         Closes the DuckDB connection associated with this instance.
-        It's good practice to close connections when you're done with them.
         """
         if hasattr(self, 'cx') and self.cx is not None:
             self.cx.close()
@@ -170,8 +170,7 @@ class CS:
 
     def __del__(self):
         """
-        Destructor to ensure the DuckDB connection is closed when
-        the CS object is garbage collected.
+        Destructor to ensure the DuckDB connection is closed (for GC).
         """
         self.close_connection()
 
@@ -189,6 +188,26 @@ class CS:
         global _table_name_gen
         _table_name_gen = table_name_generator()
 
+    @property
+    def faker_locale(self) -> str:
+        """
+        Getter for the faker_locale attribute.
+        Returns:
+            The current Faker locale string.
+        """
+        return self._faker_locale
+
+    @faker_locale.setter
+    def faker_locale(self, locale: str) -> None:
+        """
+        Setter for the faker_locale attribute.
+        Args:
+            locale: The new Faker locale string (e.g., "en_US", "es_MX").
+        """
+        if not isinstance(locale, str) or not locale:
+            raise ValueError("Faker locale must be a non-empty string.")
+        self._faker_locale = locale
+        
 # Additional methods in accesory files
 from .columns import set_type, add_column, drop_column, replace_column
 from .auxiliary import letters_for, random_code, generate_kb_code, generate_mb_code, get_file_size
