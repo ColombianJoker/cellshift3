@@ -1,5 +1,5 @@
 
-from typing import Union, Optional
+from typing import Any, Dict, Union, Optional, TYPE_CHECKING
 import pandas as pd
 import duckdb
 # from duckdb import DuckDBPyConnection
@@ -23,8 +23,7 @@ class CS:
     """
     Class that loads data, generates a unique table name, and provides
     methods to get the data as Pandas/Polars DataFrames, and save to
-    CSV/DuckDB.  A single DuckDB connection is maintained for the
-    lifetime of the object.
+    CSV/DuckDB.  Try to maintain only one DuckDB connection for everything.
     """
     def __init__(self, 
                  input_data: Union[str, pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame], 
@@ -37,14 +36,16 @@ class CS:
             db_path: The path to the DuckDB database file to use.
                      Defaults to ':memory:' for an in-memory database.
         """
-        self.db_path = db_path  # Store the database path
-        self.cx: DuckDBPyConnection = duckdb.connect(database=self.db_path, read_only=False)  # Initialize connection once
+        self.db_path = db_path                                  # Store the database path
+        self.cx: DuckDBPyConnection = duckdb.connect(database=self.db_path, read_only=False)  # Initialize
         self._tablename: str = next(_table_name_gen)            # Generate table name *before* loading
         self._original_tablename: str = self._tablename         # store original table name
         self.data: Optional[duckdb.DuckDBPyRelation] = self._load_data(input_data)
         if self.data is not None:
             self.data = self.cx.table(self._original_tablename) # force a named relation
+
         self._faker_locale: str = "es_CO"                       # Initialize with default 'Colombia'
+        self._equiv: Dict[str, Any] = {}                        # For equivalence tables 'unused'
 
     def _load_data(self, 
                    data: Union[str, pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame]) -> Optional[duckdb.DuckDBPyRelation]:
@@ -163,6 +164,7 @@ class CS:
     def close_connection(self) -> None:
         """
         Closes the DuckDB connection associated with this instance.
+        It's good practice to close connections when you're done with them.
         """
         if hasattr(self, 'cx') and self.cx is not None:
             self.cx.close()
@@ -170,7 +172,8 @@ class CS:
 
     def __del__(self):
         """
-        Destructor to ensure the DuckDB connection is closed (for GC).
+        Destructor to ensure the DuckDB connection is closed when
+        the CS object is garbage collected.
         """
         self.close_connection()
 
@@ -203,10 +206,34 @@ class CS:
         Setter for the faker_locale attribute.
         Args:
             locale: The new Faker locale string (e.g., "en_US", "es_MX").
+        Raises:
+            ValueError: If the provided locale is not a string or is empty.
         """
         if not isinstance(locale, str) or not locale:
             raise ValueError("Faker locale must be a non-empty string.")
         self._faker_locale = locale
+
+    @property
+    def equiv(self) -> Dict[str, Any]:
+        """
+        Getter for the equiv attribute.
+        Returns:
+            The current equivalence dictionary.
+        """
+        return self._equiv
+
+    @equiv.setter
+    def equiv(self, new_equiv: Dict[str, Any]) -> None:
+        """
+        Setter for the equiv attribute.
+        Args:
+            new_equiv: The new equivalence dictionary.
+        Raises:
+            TypeError: If the provided value is not a dictionary.
+        """
+        if not isinstance(new_equiv, dict):
+            raise TypeError("Equivalence mapping must be a dictionary.")
+        self._equiv = new_equiv
         
 # Additional methods in accesory files
 from .columns import set_type, add_column, drop_column, replace_column
