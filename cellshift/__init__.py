@@ -1,10 +1,11 @@
 
-from typing import Any, Dict, Union, Optional, TYPE_CHECKING
-import pandas as pd
 import duckdb
-# from duckdb import DuckDBPyConnection
+from duckdb import DuckDBPyConnection
+import pandas as pd
 import polars as pl
+import pyarrow as pa
 import sys
+from typing import Any, Dict, Union, Optional, TYPE_CHECKING
 
 # Define global variables for the table name generator
 _table_name_prefix = "table"
@@ -26,7 +27,7 @@ class CS:
     CSV/DuckDB.  Try to maintain only one DuckDB connection for everything.
     """
     def __init__(self, 
-                 input_data: Union[str, pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame], 
+                 input_data: Union[str, pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame, pa.Table], 
                  db_path: str = ':memory:'):
         """
         Initializes the CS instance.
@@ -36,43 +37,66 @@ class CS:
             db_path: The path to the DuckDB database file to use.
                      Defaults to ':memory:' for an in-memory database.
         """
-        self.db_path = db_path                                  # Store the database path
-        self.cx: DuckDBPyConnection = duckdb.connect(database=self.db_path, read_only=False)  # Initialize
-        self._tablename: str = next(_table_name_gen)            # Generate table name *before* loading
-        self._original_tablename: str = self._tablename         # store original table name
+        self.db_path = db_path                             # Store the database path
+        self.cx: DuckDBPyConnection = duckdb.connect(database=self.db_path, read_only=False) # Initialize
+        self._tablename: str = next(_table_name_gen)       # Generate table name *before* loading
+        self._original_tablename: str = self._tablename    # store original table name
+        
+        # Call _load_data, which will now ensure the data is materialized into a named 
+        # table and return the relation for that table.
         self.data: Optional[duckdb.DuckDBPyRelation] = self._load_data(input_data)
-        if self.data is not None:
-            self.data = self.cx.table(self._original_tablename) # force a named relation
-
-        self._faker_locale: str = "es_CO"                       # Initialize with default 'Colombia'
-        self._equiv: Dict[str, Any] = {}                        # For equivalence tables 'unused'
+        self._faker_locale: str = "es_CO"          # Initialize with default 'Colombia'
+        self._equiv: Dict[str, Any] = {}           # For equivalence tables 'unused'
 
     def _load_data(self, 
-                   data: Union[str, pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame]) -> Optional[duckdb.DuckDBPyRelation]:
+                   data: Union[str, pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame],
+                   verbose: bool = False) -> Optional[duckdb.DuckDBPyRelation]:
         """
         Internal method to load data and return a DuckDB relation or None.
+        Ensures the data is materialized into a named table within the DuckDB connection.
         Uses the object's connection (self.cx).
         """
         try:
             if isinstance(data, str):
-                # Load from CSV and create a table (materialize the data) with the generated name
+                if verbose:
+                  print(f"_load_data(self, data (str))", file=sys.stderr)
+                # This path already creates a named table from CSV
                 self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM read_csv_auto('{data}')")
-                # Important:  Create a named relation *immediately*
-                relation = self.cx.table(self._tablename)
-                return relation
             elif isinstance(data, pd.DataFrame):
-                relation = self.cx.from_df(data)
-                return relation
-            elif isinstance(data, duckdb.DuckDBPyRelation):
-                return data
+                sql_create = f"CREATE TABLE {self._tablename} AS SELECT * FROM data;"
+                if verbose:
+                  print(f"{type(data)=}\n", file=sys.stderr)
+                  print(f"{type(self.cx)=}\n", file=sys.stderr)
+                  print(f"{sql_create=}\n", file=sys.stderr)
+                self.cx.sql(sql_create)
             elif isinstance(data, pl.DataFrame):
-                relation = self.cx.from_df(data.to_pandas())
-                return relation
+                sql_create = f"CREATE TABLE {self._tablename} AS SELECT * FROM data;"
+                if verbose:
+                  print(f"{type(data)=}\n", file=sys.stderr)
+                  print(f"{type(self.cx)=}\n", file=sys.stderr)
+                  print(f"{sql_create=}\n", file=sys.stderr)
+                self.cx.sql(sql_create)
+            elif isinstance(data, pa.Table):
+                sql_create = f"CREATE TABLE {self._tablename} AS SELECT * FROM data;"
+                if verbose:
+                  print(f"{type(data)=}\n", file=sys.stderr)
+                  print(f"{type(self.cx)=}\n", file=sys.stderr)
+                  print(f"{sql_create=}\n", file=sys.stderr)
+                self.cx.sql(sql_create)
+            elif isinstance(data, duckdb.DuckDBPyRelation):
+                if verbose:
+                  print(f"_load_data(self, data (DuckDBPyRelation))", file=sys.stderr)
+                # If it's already a relation, materialize it into a named table
+                data.create_table(self._tablename)
             else:
-                print(f"Unsupported input type: {type(data)}")
+                print(f"Unsupported input type: {type(data)}", file=sys.stderr)
                 return None
+
+            # After any of the above, the table should exist, so we can reliably get its relation by name
+            relation = self.cx.table(self._tablename)
+            return relation
         except Exception as e:
-            print(f"An error occurred during loading: {e}")
+            print(f"An error occurred during loading: {e}", file=sys.stderr)
             return None
 
     def get_tablename(self) -> str:
@@ -83,7 +107,7 @@ class CS:
         """Retrieves the data as a Pandas DataFrame.
         
         Returns:
-            the contents of .data member in Polars DataFrame format.
+            the contents of .data member in Pandas DataFrame format.
         """
         if self.data:
             return self.data.df()
@@ -119,10 +143,10 @@ class CS:
                 self.cx.unregister(self._tablename)  # clean up
                 return True
             except Exception as e:
-                print(f"Error saving to CSV using DuckDB: {e}")
+                print(f"Error saving to CSV using DuckDB: {e}", file=sys.stderr)
                 return False
         else:
-            print("No data to save to CSV.")
+            print("No data to save to CSV.", file=sys.stderr)
             return False
 
     def to_duckdb(self, filename: str, table_name: Optional[str] = None) -> bool:
@@ -155,10 +179,10 @@ class CS:
 
                 return True  # Indicate success
             except Exception as e:
-                print(f"Error saving to DuckDB: {e}")
+                print(f"Error saving to DuckDB: {e}", file=sys.stderr)
                 return False
         else:
-            print("No data to save to DuckDB.")
+            print("No data to save to DuckDB.", file=sys.stderr)
             return False
 
     def close_connection(self) -> None:
@@ -233,10 +257,9 @@ class CS:
         """
         if not isinstance(new_equiv, dict):
             raise TypeError("Equivalence mapping must be a dictionary.")
-        self._equiv = new_equiv
-        
+        self._equiv = new_equiv        
 # Additional methods in accesory files
-from .columns import set_type, add_column, drop_column, replace_column
+from .columns import set_column_type, add_column, drop_column, replace_column, rename_column
 from .auxiliary import letters_for, random_code, generate_kb_code, generate_mb_code, get_file_size
 from .destroy import fast_overwrite, destroy
 from .noise import add_gaussian_noise_column, add_impulse_noise_column, add_salt_pepper_noise_column
@@ -245,10 +268,11 @@ from .ranges import add_integer_range_column, add_age_range_column, add_float_ra
 from .ranges import integer_range_column, age_range_column, float_range_column
 from .synthetic import add_syn_date_column
 
-CS.set_type = set_type
+CS.set_column_type = set_column_type
 CS.add_column = add_column
 CS.drop_column = drop_column
 CS.replace_column = replace_column
+CS.rename_column = rename_column
 CS.add_gaussian_noise_column = add_gaussian_noise_column
 CS.add_impulse_noise_column = add_impulse_noise_column
 CS.add_salt_pepper_noise_column = add_salt_pepper_noise_column

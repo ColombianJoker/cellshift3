@@ -9,20 +9,102 @@ from typing import Generator, Union, Optional, List, Tuple
 import sys
 from . import CS  # Import CS from the main module to be able to return self with typing
 
-def set_type(self, 
-             column_name: str, 
-             new_type: str) -> CS:
-  """Set the type of a relation (table) column by casting and using the same name
-  
-  Args:
-      column_name: The name of the column to change (string)
-      new_type: The new (SQL) type. As INT, VARCHAR, DATE, TIMESTAMP, and such
-  """
-  new_rel = self.data.project(
-    f"* EXCLUDE {column_name}, CAST({column_name} AS {new_type}) AS {column_name};"
-  )
-  self.data = new_rel
-  return self
+def set_column_type(self, 
+                    column_name: Union[str, List[str], Tuple[str]], 
+                    new_type: Union[str, List[str], Tuple[str]], 
+                    verbose: bool = False) -> CS:
+    """
+    Changes the data type of one or more columns in the CS object's data.
+    This operation preserves the original order of the columns in the table.
+
+    Args:
+        column_name: The name(s) of the column(s) whose type is to be changed.
+                     Can be a single string, or a list/tuple of strings.
+        new_type: The new data type(s) for the column(s) (e.g., 'INTEGER', 'VARCHAR', 'DOUBLE', 'DATE').
+                  Must be a single string, or a list/tuple of strings of the same size as `column_name`.
+        verbose: If True, print debug information.
+
+    Returns:
+        self: The CS object with the column types changed.
+    """
+
+    if self.data is None:
+        raise ValueError("No data loaded in the CS object.")
+
+    # Normalize inputs to lists for consistent processing
+    if isinstance(column_name, str):
+        column_names_list = [column_name]
+    elif isinstance(column_name, (list, tuple)):
+        column_names_list = list(column_name)
+    else:
+        raise TypeError("'column_name' must be a string, list of strings, or tuple of strings.")
+
+    if isinstance(new_type, str):
+        new_types_list = [new_type]
+    elif isinstance(new_type, (list, tuple)):
+        new_types_list = list(new_type)
+    else:
+        raise TypeError("'new_type' must be a string, list of strings, or tuple of strings.")
+
+    # Validate that the lists are of the same size
+    if len(column_names_list) != len(new_types_list):
+        raise ValueError("The number of column names must match the number of new types.")
+    
+    if not column_names_list: # Check if lists are empty after normalization
+        if verbose:
+            print("change_column_type: No columns specified for type change. Exiting.", file=sys.stderr)
+        return self
+
+    # Get current column names (case-insensitive for validation)
+    current_columns_lower = {col.lower(): col for col in self.data.columns} # Map lower to original case
+
+    # Validate column names exist and new types are strings
+    for i in range(len(column_names_list)):
+        col_name_input = column_names_list[i]
+        type_input = new_types_list[i]
+
+        if not isinstance(col_name_input, str):
+            raise TypeError(f"Column name at index {i} is not a string: '{col_name_input}'.")
+        if col_name_input.lower() not in current_columns_lower:
+            raise ValueError(f"Column '{col_name_input}' not found in the data.")
+        
+        if not isinstance(type_input, str):
+            raise TypeError(f"New type at index {i} is not a string: '{type_input}'.")
+
+    try:
+        # Perform each type change operation individually
+        for i in range(len(column_names_list)):
+            col_name_input = column_names_list[i]
+            type_input = new_types_list[i]
+
+            # Get the exact case of the column name from the current data.columns
+            actual_col_name_in_table = current_columns_lower[col_name_input.lower()]
+
+            sql_query = f"""
+                ALTER TABLE \"{self._tablename}\"
+                ALTER COLUMN \"{actual_col_name_in_table}\" SET DATA TYPE {type_input};
+            """
+            # if verbose:
+            #     print(f"change_column_type: Executing SQL: {sql_query}", file=sys.stderr)
+            self.cx.execute(sql_query)
+            if verbose:
+                print(f"change_column_type: Column '{actual_col_name_in_table}' type changed to '{type_input}'.", file=sys.stderr)
+
+        # After all type changes, refresh self.data to reflect the new schema
+        self.data = self.cx.table(self._tablename)
+        if verbose:
+            print(f"change_column_type: self.data refreshed. New columns/types: {self.data.columns}", file=sys.stderr)
+
+        return self
+
+    except Exception as e:
+        if verbose:
+            print(f"Error in change_column_type: {e}", file=sys.stderr)
+        raise e # Re-raise the exception to propagate it.
+
+    finally:
+       pass
+    return self
 
 def add_column(self, 
                column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series, np.ndarray, list, tuple, duckdb.DuckDBPyRelation, pa.Array], 
@@ -114,7 +196,8 @@ def add_column(self,
         # print(f"add_column: Unregistered view {temp_view_name}", file=sys.stderr)
     return self
 
-def drop_column(self, column_names: Union[str, List[str], Tuple[str]]) -> CS:
+def drop_column(self,
+                column_names: Union[str, List[str], Tuple[str]]) -> CS:
     """
     Drops one or more columns from the CS object's data.
 
@@ -246,4 +329,108 @@ def replace_column(self,
 
     finally:
         pass
+    return self
+
+def rename_column(self,
+                  base_column: Union[str, List[str], Tuple[str]], 
+                  new_column_name: Union[str, List[str], Tuple[str]],
+                  verbose: bool = False) -> CS:
+    """
+    Renames one or more columns in the CS object's data.
+
+    Args:
+        base_column: The current name(s) of the column(s) to be renamed.
+                     Can be a single string, or a list/tuple of strings.
+        new_column_name: The new name(s) for the column(s).
+                         Must be a single string, or a list/tuple of strings of the same size as `base_column`.
+        verbose: If True, print debug information.
+
+    Returns:
+        a new version of the CS object
+    """
+    if self.data is None:
+        raise ValueError("No data loaded in the CS object.")
+
+    # Normalize inputs to lists for consistent processing
+    if isinstance(base_column, str):
+        base_columns_list = [base_column]
+    elif isinstance(base_column, (list, tuple)):
+        base_columns_list = list(base_column)
+    else:
+        raise TypeError("'base_column' must be a string, list of strings, or tuple of strings.")
+
+    if isinstance(new_column_name, str):
+        new_column_names_list = [new_column_name]
+    elif isinstance(new_column_name, (list, tuple)):
+        new_column_names_list = list(new_column_name)
+    else:
+        raise TypeError("'new_column_name' must be a string, list of strings, or tuple of strings.")
+
+    # Validate that the lists are of the same size
+    if len(base_columns_list) != len(new_column_names_list):
+        raise ValueError("The number of base columns must match the number of new column names.")
+    
+    if not base_columns_list: # Check if lists are empty after normalization
+        if verbose:
+            print("rename_column: No columns specified for renaming. Exiting.", file=sys.stderr)
+        return self
+
+    # Get current column names (case-insensitive for validation)
+    current_columns_lower = [col.lower() for col in self.data.columns]
+    current_columns_original_case = list(self.data.columns) # To preserve original casing if needed
+
+    # Validate old column names exist and new column names are valid identifiers
+    for i, old_name in enumerate(base_columns_list):
+        if not isinstance(old_name, str):
+            raise TypeError(f"Base column name at index {i} is not a string: '{old_name}'.")
+        if old_name.lower() not in current_columns_lower:
+            raise ValueError(f"Column to rename '{old_name}' not found in the data.")
+        
+        new_name = new_column_names_list[i]
+        if not isinstance(new_name, str):
+            raise TypeError(f"New column name at index {i} is not a string: '{new_name}'.")
+        if not new_name.isidentifier():
+            raise ValueError(f"New column name '{new_name}' is not a valid identifier (e.g., no spaces or special characters).")
+        
+        # Check for conflicts: new name should not exist as another *current* column
+        # unless it's the very column being renamed (which is handled by ALTER TABLE)
+        # We need to be careful here: if 'A' is renamed to 'B', and 'B' already exists, it's an error.
+        if new_name.lower() in current_columns_lower and old_name.lower() != new_name.lower():
+            # Ensure the new name doesn't conflict with an *unaffected* existing column
+            # DuckDB's ALTER TABLE RENAME handles this
+            pass # Rely on DuckDB's error for now.
+
+    try:
+        # Perform each rename operation individually
+        for i in range(len(base_columns_list)):
+            old_name = base_columns_list[i]
+            new_name = new_column_names_list[i]
+
+            # Find the exact case of the old column name in the current data.columns
+            actual_old_name_in_table = next((col for col in current_columns_original_case if col.lower() == old_name.lower()), old_name)
+
+            sql_query = f"""
+                ALTER TABLE \"{self._tablename}\"
+                RENAME COLUMN \"{actual_old_name_in_table}\" TO \"{new_name}\";
+            """
+            if verbose:
+                print(f"2: rename_column: Executing SQL: {sql_query}", file=sys.stderr)
+            self.cx.execute(sql_query)
+            if verbose:
+                print(f"3: rename_column: Column '{actual_old_name_in_table}' renamed to '{new_name}'.", file=sys.stderr)
+
+        # After all renames, refresh self.data to reflect the new schema
+        self.data = self.cx.table(self._tablename)
+        if verbose:
+            print(f"4: rename_column: self.data refreshed.", file=sys.stderr)
+
+        return self
+
+    except Exception as e:
+        if verbose:
+            print(f"Error in rename_column: {e}", file=sys.stderr)
+        raise e # Re-raise the exception to propagate it.
+
+    finally:
+       pass
     return self

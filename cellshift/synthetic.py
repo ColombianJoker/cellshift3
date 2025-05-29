@@ -10,9 +10,12 @@ from typing import List, Tuple, Optional, Union
 import sys
 from . import CS  # Import CS from the main module to be able to return self with typing
 
-def add_syn_date_column(self, base_column: Optional[str] = None, new_column_name: Optional[str] = None,
-                        start_date: Optional[str] = None, end_date: Optional[str] = None,
-                        date_format: str = '%Y-%m-%d', verbose: bool = False) -> CS:
+def add_syn_date_column(self, base_column: Optional[str] = None,
+                        new_column_name: Optional[str] = None,
+                        start_date: Optional[str] = None, 
+                        end_date: Optional[str] = None,
+                        date_format: str = '%Y-%m-%d',
+                        verbose: bool = False) -> CS:
     """
     Adds a new column with synthetic random dates based on specified date ranges.
 
