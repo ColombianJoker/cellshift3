@@ -5,7 +5,8 @@ import pandas as pd
 import polars as pl
 import pyarrow as pa
 import sys
-from typing import Any, Dict, Union, Optional, TYPE_CHECKING
+import tempfile
+from typing import Any, List, Dict, Union, Optional, TYPE_CHECKING
 
 # Define global variables for the table name generator
 _table_name_prefix = "table"
@@ -27,7 +28,7 @@ class CS:
     CSV/DuckDB.  Try to maintain only one DuckDB connection for everything.
     """
     def __init__(self, 
-                 input_data: Union[str, pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame, pa.Table], 
+                 input_data: Union[str, List[str], pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame, pa.Table], 
                  db_path: str = ':memory:'):
         """
         Initializes the CS instance.
@@ -38,7 +39,11 @@ class CS:
                      Defaults to ':memory:' for an in-memory database.
         """
         self.db_path = db_path                             # Store the database path
-        self.cx: DuckDBPyConnection = duckdb.connect(database=self.db_path, read_only=False) # Initialize
+        self.temp_dir = tempfile.mkdtemp()
+        self.cx: DuckDBPyConnection = duckdb.connect(database=self.db_path,
+                                      read_only=False,
+                                      config={"temp_directory": self.temp_dir, },
+        ) # Initialize
         self._tablename: str = next(_table_name_gen)       # Generate table name *before* loading
         self._original_tablename: str = self._tablename    # store original table name
         
@@ -49,7 +54,7 @@ class CS:
         self._equiv: Dict[str, Any] = {}           # For equivalence tables 'unused'
 
     def _load_data(self, 
-                   data: Union[str, pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame],
+                   data: Union[str, List[str], pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame],
                    verbose: bool = False) -> Optional[duckdb.DuckDBPyRelation]:
         """
         Internal method to load data and return a DuckDB relation or None.
@@ -59,9 +64,22 @@ class CS:
         try:
             if isinstance(data, str):
                 if verbose:
-                  print(f"_load_data(self, data (str))", file=sys.stderr)
+                  print(f"_load_data(self, '{data}' (str))", file=sys.stderr)
                 # This path already creates a named table from CSV
-                self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM read_csv_auto('{data}')")
+                self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM '{data}'")
+            elif isinstance(data, list):
+              first_item = data.pop(0) # get first item and remove it to create
+              sql_create = f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM '{first_item}';"
+              if verbose:
+                print(f"_load_data(self, '{first_item}' (str))", file=sys.stderr)
+                print(f"{sql_create=}", file=sys.stderr)
+              self.cx.execute(sql_create)
+              for item in data:
+                sql_insert = f"INSERT INTO \"{self._tablename}\" SELECT * FROM '{item}';"
+                if verbose:
+                  print(f"_load_data(self, '{item}' (str))", file=sys.stderr)
+                  print(f"{sql_insert=}", file=sys.stderr)
+                self.cx.execute(sql_insert)
             elif isinstance(data, pd.DataFrame):
                 sql_create = f"CREATE TABLE {self._tablename} AS SELECT * FROM data;"
                 if verbose:
