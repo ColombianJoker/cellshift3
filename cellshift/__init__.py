@@ -64,46 +64,46 @@ class CS:
         try:
             if isinstance(data, str):
                 if verbose:
-                  print(f"_load_data(self, '{data}' (str))", file=sys.stderr)
+                    print(f"_load_data(self, '{data}' (str))", file=sys.stderr)
                 # This path already creates a named table from CSV
                 self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM '{data}'")
             elif isinstance(data, list):
-              first_item = data.pop(0) # get first item and remove it to create
-              sql_create = f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM '{first_item}';"
-              if verbose:
-                print(f"_load_data(self, '{first_item}' (str))", file=sys.stderr)
-                print(f"{sql_create=}", file=sys.stderr)
-              self.cx.execute(sql_create)
-              for item in data:
-                sql_insert = f"INSERT INTO \"{self._tablename}\" SELECT * FROM '{item}';"
+                first_item = data.pop(0) # get first item and remove it to create
+                sql_create = f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM '{first_item}';"
                 if verbose:
-                  print(f"_load_data(self, '{item}' (str))", file=sys.stderr)
-                  print(f"{sql_insert=}", file=sys.stderr)
-                self.cx.execute(sql_insert)
+                    print(f"_load_data(self, '{first_item}' (str))", file=sys.stderr)
+                    print(f"{sql_create=}", file=sys.stderr)
+                self.cx.execute(sql_create)
+                for item in data:
+                    sql_insert = f"INSERT INTO \"{self._tablename}\" SELECT * FROM '{item}';"
+                    if verbose:
+                        print(f"_load_data(self, '{item}' (str))", file=sys.stderr)
+                        print(f"{sql_insert=}", file=sys.stderr)
+                    self.cx.execute(sql_insert)
             elif isinstance(data, pd.DataFrame):
                 sql_create = f"CREATE TABLE {self._tablename} AS SELECT * FROM data;"
                 if verbose:
-                  print(f"{type(data)=}\n", file=sys.stderr)
-                  print(f"{type(self.cx)=}\n", file=sys.stderr)
-                  print(f"{sql_create=}\n", file=sys.stderr)
+                    print(f"{type(data)=}\n", file=sys.stderr)
+                    print(f"{type(self.cx)=}\n", file=sys.stderr)
+                    print(f"{sql_create=}\n", file=sys.stderr)
                 self.cx.sql(sql_create)
             elif isinstance(data, pl.DataFrame):
                 sql_create = f"CREATE TABLE {self._tablename} AS SELECT * FROM data;"
                 if verbose:
-                  print(f"{type(data)=}\n", file=sys.stderr)
-                  print(f"{type(self.cx)=}\n", file=sys.stderr)
-                  print(f"{sql_create=}\n", file=sys.stderr)
+                    print(f"{type(data)=}\n", file=sys.stderr)
+                    print(f"{type(self.cx)=}\n", file=sys.stderr)
+                    print(f"{sql_create=}\n", file=sys.stderr)
                 self.cx.sql(sql_create)
             elif isinstance(data, pa.Table):
                 sql_create = f"CREATE TABLE {self._tablename} AS SELECT * FROM data;"
                 if verbose:
-                  print(f"{type(data)=}\n", file=sys.stderr)
-                  print(f"{type(self.cx)=}\n", file=sys.stderr)
-                  print(f"{sql_create=}\n", file=sys.stderr)
+                    print(f"{type(data)=}\n", file=sys.stderr)
+                    print(f"{type(self.cx)=}\n", file=sys.stderr)
+                    print(f"{sql_create=}\n", file=sys.stderr)
                 self.cx.sql(sql_create)
             elif isinstance(data, duckdb.DuckDBPyRelation):
                 if verbose:
-                  print(f"_load_data(self, data (DuckDBPyRelation))", file=sys.stderr)
+                    print(f"_load_data(self, data (DuckDBPyRelation))", file=sys.stderr)
                 # If it's already a relation, materialize it into a named table
                 data.create_table(self._tablename)
             else:
@@ -182,17 +182,17 @@ class CS:
             try:
                 output_table_name = table_name if table_name else self._original_tablename # Use original table name
 
-                # 1. Create a new connection to the *output* database file.
+                # Create a new connection to the *output* database file.
                 with duckdb.connect(database=filename, read_only=False) as output_cx:
-                    # 2. Register the data (relation) as a view in the *output* connection.
+                    # Register the data (relation) as a view in the *output* connection.
                     output_cx.register(self._tablename, self.data)
 
-                    # 3. Create a table in the output database with the desired name.
+                    # Create a table in the output database with the desired name.
                     output_cx.execute(
                         f"CREATE TABLE IF NOT EXISTS \"{output_table_name}\" AS SELECT * FROM \"{self._tablename}\""
                     )
 
-                    # 4. Unregister the view.
+                    # Unregister the view.
                     output_cx.unregister(self._tablename)
 
                 return True  # Indicate success
@@ -202,6 +202,35 @@ class CS:
         else:
             print("No data to save to DuckDB.", file=sys.stderr)
             return False
+
+    def add(self,
+            input_data: Union[str, List[str], pd.DataFrame, pl.DataFrame, pa.Table],
+            verbose: bool = False) -> 'CS':
+      """
+      Adds new data to the existing .data member of the class.
+      The new data is added using INSERT into current data.
+      Column names and types must be compatible with existing data.
+    
+      Args:
+          input_data: the data to add. Receives:
+                      + a string (filename of a file to load)
+                      + a list of strings (each a filename of a file to load)
+                      + a Pandas DataFrame
+                      + a Polars DataFrame
+                      + a PyArrow Table
+          verbose: If True, show debug messages
+    
+      Returns:
+          a new version of the CS object
+      """
+      if verbose:
+          print(f"add: Start, input_data type: {type(input_data)}", file=sys.stderr)
+      if isinstance(input_data, str):
+          sql_insert = sql_insert = f"INSERT INTO \"{self._tablename}\" SELECT * FROM '{input_data}';"
+          if verbose:
+              print(f"add('{input_data}') (str)", file=sys.stderr)
+              print(sql_insert)
+          self
 
     def close_connection(self) -> None:
         """
