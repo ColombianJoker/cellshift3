@@ -417,12 +417,12 @@ def rename_column(self,
                 print(f"2: rename_column: Executing SQL: {sql_query}", file=sys.stderr)
             self.cx.execute(sql_query)
             if verbose:
-                print(f"3: rename_column: Column '{actual_old_name_in_table}' renamed to '{new_name}'.", file=sys.stderr)
+                print(f"rename_column: Column '{actual_old_name_in_table}' renamed to '{new_name}'.", file=sys.stderr)
 
         # After all renames, refresh self.data to reflect the new schema
         self.data = self.cx.table(self._tablename)
         if verbose:
-            print(f"4: rename_column: self.data refreshed.", file=sys.stderr)
+            print(f"rename_column: self.data refreshed.", file=sys.stderr)
 
         return self
 

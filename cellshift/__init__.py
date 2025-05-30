@@ -47,9 +47,17 @@ class CS:
         self._tablename: str = next(_table_name_gen)       # Generate table name *before* loading
         self._original_tablename: str = self._tablename    # store original table name
         
-        # Call _load_data, which will now ensure the data is materialized into a named 
+        # Call _load_data, to make sure the data is materialized into a named 
         # table and return the relation for that table.
-        self.data: Optional[duckdb.DuckDBPyRelation] = self._load_data(input_data)
+        while True:
+            # print(f"{self._tablename=}", file=sys.stderr)
+            try:
+                self._original_tablename: str = self._tablename
+                self.data: Optional[duckdb.DuckDBPyRelation] = self._load_data(input_data)
+                break # exit the retry loop
+            except duckdb.CatalogException as e:
+                print(f"{e=}", file=sys.stderr)
+                self._tablename = next(_table_name_gen) # will try next name
         self._faker_locale: str = "es_CO"          # Initialize with default 'Colombia'
         self._equiv: Dict[str, Any] = {}           # For equivalence tables 'unused'
 
@@ -113,6 +121,8 @@ class CS:
             # After any of the above, the table should exist, so we can reliably get its relation by name
             relation = self.cx.table(self._tablename)
             return relation
+        except duckdb.CatalogException as e:
+          raise e
         except Exception as e:
             print(f"An error occurred during loading: {e}", file=sys.stderr)
             return None
@@ -203,35 +213,6 @@ class CS:
             print("No data to save to DuckDB.", file=sys.stderr)
             return False
 
-    def add(self,
-            input_data: Union[str, List[str], pd.DataFrame, pl.DataFrame, pa.Table],
-            verbose: bool = False) -> 'CS':
-      """
-      Adds new data to the existing .data member of the class.
-      The new data is added using INSERT into current data.
-      Column names and types must be compatible with existing data.
-    
-      Args:
-          input_data: the data to add. Receives:
-                      + a string (filename of a file to load)
-                      + a list of strings (each a filename of a file to load)
-                      + a Pandas DataFrame
-                      + a Polars DataFrame
-                      + a PyArrow Table
-          verbose: If True, show debug messages
-    
-      Returns:
-          a new version of the CS object
-      """
-      if verbose:
-          print(f"add: Start, input_data type: {type(input_data)}", file=sys.stderr)
-      if isinstance(input_data, str):
-          sql_insert = sql_insert = f"INSERT INTO \"{self._tablename}\" SELECT * FROM '{input_data}';"
-          if verbose:
-              print(f"add('{input_data}') (str)", file=sys.stderr)
-              print(sql_insert)
-          self
-
     def close_connection(self) -> None:
         """
         Closes the DuckDB connection associated with this instance.
@@ -307,6 +288,7 @@ class CS:
         self._equiv = new_equiv        
 # Additional methods in accesory files
 from .columns import set_column_type, add_column, drop_column, replace_column, rename_column
+from .rows import add_data, remove_na_rows
 from .auxiliary import letters_for, random_code, generate_kb_code, generate_mb_code, get_file_size
 from .destroy import fast_overwrite, destroy
 from .noise import add_gaussian_noise_column, add_impulse_noise_column, add_salt_pepper_noise_column
@@ -320,6 +302,9 @@ CS.add_column = add_column
 CS.drop_column = drop_column
 CS.replace_column = replace_column
 CS.rename_column = rename_column
+CS.add_data = add_data
+CS.remove_na_rows = remove_na_rows
+CS.remove_null_rows = remove_na_rows
 CS.add_gaussian_noise_column = add_gaussian_noise_column
 CS.add_impulse_noise_column = add_impulse_noise_column
 CS.add_salt_pepper_noise_column = add_salt_pepper_noise_column
