@@ -165,10 +165,12 @@ class CS:
         if self.data:
             try:
                 # Create a temporary view with the table name
-                self.cx.register(self._tablename, self.data)
+                new_table_name = next(_table_name_gen)
+                self.cx.register(new_table_name, self.data)
                 # Use DuckDB's SQL to write to CSV
-                self.cx.execute(f"COPY (SELECT * FROM \"{self._tablename}\") TO '{filename}' (HEADER, DELIMITER ',');")
-                self.cx.unregister(self._tablename)  # clean up
+                sql_write = f"COPY (SELECT * FROM \"{new_table_name}\") TO '{filename}' (HEADER, DELIMITER ',');"
+                self.cx.execute(sql_write)
+                self.cx.unregister(new_table_name)  # clean up
                 return True
             except Exception as e:
                 print(f"Error saving to CSV using DuckDB: {e}", file=sys.stderr)
@@ -286,6 +288,7 @@ class CS:
         if not isinstance(new_equiv, dict):
             raise TypeError("Equivalence mapping must be a dictionary.")
         self._equiv = new_equiv        
+
 # Additional methods in accesory files
 from .columns import set_column_type, add_column, drop_column, replace_column, rename_column
 from .rows import add_data, remove_na_rows
@@ -300,11 +303,14 @@ from .synthetic import add_syn_date_column
 CS.set_column_type = set_column_type
 CS.add_column = add_column
 CS.drop_column = drop_column
+CS.drop_columns = drop_column
 CS.replace_column = replace_column
 CS.rename_column = rename_column
+CS.rename_columns = rename_column
 CS.add_data = add_data
 CS.remove_na_rows = remove_na_rows
 CS.remove_null_rows = remove_na_rows
+CS.remove_na = remove_na_rows
 CS.add_gaussian_noise_column = add_gaussian_noise_column
 CS.add_impulse_noise_column = add_impulse_noise_column
 CS.add_salt_pepper_noise_column = add_salt_pepper_noise_column
