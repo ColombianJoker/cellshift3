@@ -27,8 +27,8 @@ class CS:
     methods to get the data as Pandas/Polars DataFrames, and save to
     CSV/DuckDB.  Try to maintain only one DuckDB connection for everything.
     """
-    def __init__(self, 
-                 input_data: Union[str, List[str], pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame, pa.Table], 
+    def __init__(self,
+                 input_data: Union[str, List[str], pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame, pa.Table],
                  db_path: str = ':memory:'):
         """
         Initializes the CS instance.
@@ -46,8 +46,8 @@ class CS:
         ) # Initialize
         self._tablename: str = next(_table_name_gen)       # Generate table name *before* loading
         self._original_tablename: str = self._tablename    # store original table name
-        
-        # Call _load_data, to make sure the data is materialized into a named 
+
+        # Call _load_data, to make sure the data is materialized into a named
         # table and return the relation for that table.
         while True:
             # print(f"{self._tablename=}", file=sys.stderr)
@@ -61,7 +61,7 @@ class CS:
         self._faker_locale: str = "es_CO"          # Initialize with default 'Colombia'
         self._equiv: Dict[str, Any] = {}           # For equivalence tables 'unused'
 
-    def _load_data(self, 
+    def _load_data(self,
                    data: Union[str, List[str], pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame],
                    verbose: bool = False) -> Optional[duckdb.DuckDBPyRelation]:
         """
@@ -133,7 +133,7 @@ class CS:
 
     def to_pandas(self) -> Optional[pd.DataFrame]:
         """Retrieves the data as a Pandas DataFrame.
-        
+
         Returns:
             the contents of .data member in Pandas DataFrame format.
         """
@@ -144,7 +144,7 @@ class CS:
 
     def to_polars(self) -> Optional[pl.DataFrame]:
         """Retrieves the data as a Polars DataFrame.
-        
+
         Returns:
             the contents of .data member in Polars DataFrame format.
         """
@@ -155,10 +155,10 @@ class CS:
 
     def to_csv(self, filename: str, **kwargs) -> bool:
         """Saves the data to a CSV file using DuckDB's SQL interface.
-        
+
         Args:
             filename: The name of the output CSV file.
-        
+
         Returns:
             True on success, False on failure.
         """
@@ -287,11 +287,11 @@ class CS:
         """
         if not isinstance(new_equiv, dict):
             raise TypeError("Equivalence mapping must be a dictionary.")
-        self._equiv = new_equiv        
+        self._equiv = new_equiv
 
 # Additional methods in accesory files
 from .columns import set_column_type, add_column, drop_column, replace_column, rename_column
-from .rows import add_data, remove_na_rows
+from .rows import add_data, remove_rows
 from .auxiliary import letters_for, random_code, generate_kb_code, generate_mb_code, get_file_size
 from .destroy import fast_overwrite, destroy
 from .noise import add_gaussian_noise_column, add_impulse_noise_column, add_salt_pepper_noise_column
@@ -308,9 +308,9 @@ CS.replace_column = replace_column
 CS.rename_column = rename_column
 CS.rename_columns = rename_column
 CS.add_data = add_data
-CS.remove_na_rows = remove_na_rows
-CS.remove_null_rows = remove_na_rows
-CS.remove_na = remove_na_rows
+CS.remove_rows = remove_rows
+CS.remove_na_rows = remove_rows
+CS.remove_null_rows = remove_rows
 CS.add_gaussian_noise_column = add_gaussian_noise_column
 CS.add_impulse_noise_column = add_impulse_noise_column
 CS.add_salt_pepper_noise_column = add_salt_pepper_noise_column

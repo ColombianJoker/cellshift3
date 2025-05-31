@@ -71,22 +71,23 @@ def add_data(self,
     self.data = self.cx.table(self._tablename)
     return self
 
-def remove_na_rows(self, 
-                   base_column: Union[str, List[str]], 
-                   condition: str = '%% IS NULL',
-                   meta: str = '%%',
+def remove_rows(self,
+                   base_column: Union[str, List[str]],
+                   condition: str = '? IS NULL',
+                   meta: str = '?',
                    verbose: bool = False) -> 'CS':
     """
-    Removes rows from the .data member based on a custom SQL condition applied to specified columns.
+    Removes rows from the .data member based on a custom SQL condition applied to specified columns,
+            defaulting to removing rows where the column is NULL.
 
     Args:
         base_column: A single column name (string) or a list of column names
                      (strings) to apply the condition to.
         condition: A string representing the SQL condition template for each column.
                    It must contain the 'meta' string which will be replaced by the column name.
-                   Defaults to '%% IS NULL' to remove rows where the column is NULL.
+                   Defaults to '? IS NULL' to remove rows where the column is NULL.
         meta: The meta-character string within the 'condition' that will be replaced
-              by the actual column name. Defaults to '%%'.
+              by the actual column name. Defaults to '?'.
         verbose: If True, print debug information.
 
     Returns:
@@ -94,7 +95,7 @@ def remove_na_rows(self,
     """
     if self.data is None:
         if verbose:
-            print("remove_na_rows: No data loaded in .data. Nothing to filter.", file=sys.stderr)
+            print("remove_rows: No data loaded in .data. Nothing to filter.", file=sys.stderr)
         return self
 
     # Normalize base_column to a list of strings
@@ -103,37 +104,37 @@ def remove_na_rows(self,
         columns_to_check = [base_column]
     elif isinstance(base_column, list):
         if not all(isinstance(col, str) for col in base_column):
-            raise TypeError("remove_na_rows: All items in 'base_column' list must be strings.")
+            raise TypeError("remove_rows: All items in 'base_column' list must be strings.")
         columns_to_check = base_column
     else:
-        raise TypeError("remove_na_rows: 'base_column' must be a string or a list of strings.")
+        raise TypeError("remove_rows: 'base_column' must be a string or a list of strings.")
 
     if not columns_to_check:
         if verbose:
-            print("remove_na_rows: No columns specified to check. No filtering applied.", file=sys.stderr)
+            print("remove_rows: No columns specified to check. No filtering applied.", file=sys.stderr)
         return self
 
     if not isinstance(condition, str) or not condition:
-        raise TypeError("remove_na_rows: 'condition' must be a non-empty string.")
+        raise TypeError("remove_rows: 'condition' must be a non-empty string.")
     if not isinstance(meta, str) or not meta:
-        raise TypeError("remove_na_rows: 'meta' must be a non-empty string.")
+        raise TypeError("remove_rows: 'meta' must be a non-empty string.")
     if meta not in condition:
-        raise ValueError(f"remove_na_rows: 'meta' string '{meta}' not found in 'condition' string '{condition}'.")
+        raise ValueError(f"remove_rows: 'meta' string '{meta}' not found in 'condition' string '{condition}'.")
 
     # Get existing column names from the data
     # Note: self.data.columns is already a list of strings (column names)
     existing_columns = self.data.columns
     if verbose:
         print(f"{self.data.columns=}\n", file=sys.stderr)
-        
+
     # Validate if all specified columns exist
     for col in columns_to_check:
         if col not in existing_columns:
-            raise ValueError(f"remove_na_rows: Column '{col}' not found in the data. Existing columns: {', '.join(existing_columns)}")
+            raise ValueError(f"remove_rows: Column '{col}' not found in the data. Existing columns: {', '.join(existing_columns)}")
 
     try:
         # Build the WHERE clause using the custom condition and meta-character replacement
-        # Example: for condition='%% < 0' and meta='%%', 
+        # Example: for condition='? < 0' and meta='?',
         #          it becomes '(NOT ("col1" < 0)) AND (NOT ("col2" < 0))'
         conditions_for_sql = []
         for col in columns_to_check:
@@ -144,13 +145,13 @@ def remove_na_rows(self,
         where_clause = " AND ".join(conditions_for_sql)
 
         if verbose:
-            print(f"remove_na_rows: Filtering rows where {where_clause}", file=sys.stderr)
+            print(f"remove_rows: Filtering rows where {where_clause}", file=sys.stderr)
             initial_row_count = self.data.shape[0]
 
         # Construct the SQL query to select filtered rows
         select_cols = ", ".join([f"\"{col}\"" for col in existing_columns])
         filter_query_sql = f"SELECT {select_cols} FROM \"{self._original_tablename}\" WHERE {where_clause}"
-        
+
         if verbose:
             print(f"{filter_query_sql=}", file=sys.stderr)
 
@@ -160,17 +161,17 @@ def remove_na_rows(self,
         self.cx.execute(f"DROP TABLE IF EXISTS \"{self._tablename}\"")
         self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM new_data")
         self.data = self.cx.table(self._tablename)
-        
+
         if verbose:
             final_row_count = self.data.shape[0]
             rows_removed = initial_row_count - final_row_count
-            print(f"remove_na_rows: Filtered successfully. {rows_removed} rows removed. New row count: {final_row_count}", file=sys.stderr)
+            print(f"remove_rows: Filtered successfully. {rows_removed} rows removed. New row count: {final_row_count}", file=sys.stderr)
 
         return self
 
     except Exception as e:
         if verbose:
-            print(f"remove_na_rows: An error occurred during filtering: {e}", file=sys.stderr)
+            print(f"remove_rows: An error occurred during filtering: {e}", file=sys.stderr)
         # Re-raise the exception after printing verbose info
         raise ValueError(f"Failed to remove rows based on condition: {e}")
     return self
