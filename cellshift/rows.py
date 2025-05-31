@@ -281,7 +281,7 @@ def filter_rows(self,
         raise ValueError(f"Failed to remove rows based on condition: {e}")
     return self
 
-def sql(self,
+def run_sql(self,
         sql: str,
         table_name: str = 'TABLE',
         verbose: bool = False) -> 'CS':
@@ -358,7 +358,8 @@ def sql(self,
             # Execute the query and get the result as a relation
             #
             # self.cx.register(table_name, self.data)
-            print(f"run_sql: Executing changed SQL query:\n{sql}", file=sys.stderr)
+            if verbose:
+                print(f"run_sql: Executing changed SQL query:\n{sql}", file=sys.stderr)
             new_data = self.cx.sql(sql)
             # self.cx.unregister(table_name)
 
