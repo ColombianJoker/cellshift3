@@ -175,3 +175,226 @@ def remove_rows(self,
         # Re-raise the exception after printing verbose info
         raise ValueError(f"Failed to remove rows based on condition: {e}")
     return self
+
+def filter_rows(self,
+                   base_column: Union[str, List[str]],
+                   condition: str = '? IS NOT NULL',
+                   meta: str = '?',
+                   verbose: bool = False) -> 'CS':
+    """
+    Filters rows from the .data member based on a custom SQL condition applied to specified columns,
+        leaving only rows where the condition is met, defaulting to removing rows where the column is NULL.
+
+    Args:
+        base_column: A single column name (string) or a list of column names
+                     (strings) to apply the condition to.
+        condition: A string representing the SQL condition template for each column.
+                   It must contain the 'meta' string which will be replaced by the column name.
+                   Defaults to '? IS NULL' to remove rows where the column is NULL.
+        meta: The meta-character string within the 'condition' that will be replaced
+              by the actual column name. Defaults to '?'.
+        verbose: If True, print debug information.
+
+    Returns:
+        self: The CS object with rows filtered based on the specified condition.
+    """
+    if self.data is None:
+        if verbose:
+            print("remove_rows: No data loaded in .data. Nothing to filter.", file=sys.stderr)
+        return self
+
+    # Normalize base_column to a list of strings
+    columns_to_check: List[str] = []
+    if isinstance(base_column, str):
+        columns_to_check = [base_column]
+    elif isinstance(base_column, list):
+        if not all(isinstance(col, str) for col in base_column):
+            raise TypeError("remove_rows: All items in 'base_column' list must be strings.")
+        columns_to_check = base_column
+    else:
+        raise TypeError("remove_rows: 'base_column' must be a string or a list of strings.")
+
+    if not columns_to_check:
+        if verbose:
+            print("remove_rows: No columns specified to check. No filtering applied.", file=sys.stderr)
+        return self
+
+    if not isinstance(condition, str) or not condition:
+        raise TypeError("remove_rows: 'condition' must be a non-empty string.")
+    if not isinstance(meta, str) or not meta:
+        raise TypeError("remove_rows: 'meta' must be a non-empty string.")
+    if meta not in condition:
+        raise ValueError(f"remove_rows: 'meta' string '{meta}' not found in 'condition' string '{condition}'.")
+
+    # Get existing column names from the data
+    # Note: self.data.columns is already a list of strings (column names)
+    existing_columns = self.data.columns
+    if verbose:
+        print(f"{self.data.columns=}\n", file=sys.stderr)
+
+    # Validate if all specified columns exist
+    for col in columns_to_check:
+        if col not in existing_columns:
+            raise ValueError(f"remove_rows: Column '{col}' not found in the data. Existing columns: {', '.join(existing_columns)}")
+
+    try:
+        # Build the WHERE clause using the custom condition and meta-character replacement
+        # Example: for condition='? < 0' and meta='?',
+        #          it becomes '(NOT ("col1" < 0)) AND (NOT ("col2" < 0))'
+        conditions_for_sql = []
+        for col in columns_to_check:
+            # Replace the meta-character with the quoted column name
+            sql_condition_for_col = condition.replace(meta, f"\"{col}\"")
+            conditions_for_sql.append(f"({sql_condition_for_col})") # Wrap each condition in parentheses for safety
+
+        where_clause = " AND ".join(conditions_for_sql)
+
+        if verbose:
+            print(f"remove_rows: Filtering rows where {where_clause}", file=sys.stderr)
+            initial_row_count = self.data.shape[0]
+
+        # Construct the SQL query to select filtered rows
+        select_cols = ", ".join([f"\"{col}\"" for col in existing_columns])
+        filter_query_sql = f"SELECT {select_cols} FROM \"{self._original_tablename}\" WHERE {where_clause}"
+
+        if verbose:
+            print(f"{filter_query_sql=}", file=sys.stderr)
+
+        # Execute the query and fetch the result as an Arrow Table
+        new_data = self.cx.execute(filter_query_sql).fetch_arrow_table()
+        # Drop the existing table and create a new one with the replaced columns.
+        self.cx.execute(f"DROP TABLE IF EXISTS \"{self._tablename}\"")
+        self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM new_data")
+        self.data = self.cx.table(self._tablename)
+
+        if verbose:
+            final_row_count = self.data.shape[0]
+            rows_removed = initial_row_count - final_row_count
+            print(f"remove_rows: Filtered successfully. {rows_removed} rows removed. New row count: {final_row_count}", file=sys.stderr)
+
+        return self
+
+    except Exception as e:
+        if verbose:
+            print(f"remove_rows: An error occurred during filtering: {e}", file=sys.stderr)
+        # Re-raise the exception after printing verbose info
+        raise ValueError(f"Failed to remove rows based on condition: {e}")
+    return self
+
+def sql(self,
+        sql: str,
+        table_name: str = 'TABLE',
+        verbose: bool = False) -> 'CS':
+    """
+    Runs a given SQL query on the current .data member and updates .data
+    with the result of the query. Uses the name in 'table_name' for .data member (defaults to 'TABLE')
+
+    This method assumes the SQL query is a SELECT statement that produces
+    a result table. If the query is a DDL/DML statement (e.g., INSERT, UPDATE, DELETE, CREATE),
+    it will execute it but will not update .data from its result,
+    unless the DDL/DML implicitly modifies the table behind .data
+    (e.g., INSERT/UPDATE/DELETE on self._original_tablename).
+
+    For SELECT statements, the result replaces the current .data.
+    For other statements, the .data relation is refreshed from the underlying table.
+
+    Args:
+        sql: The SQL query string to execute.
+        table_name: the name used for the .data member in SQL sentences
+        verbose: If True, print debug information.
+
+    Returns:
+        self: The CS object with the .data member updated according to the SQL query.
+    """
+    if verbose:
+        print(f"{sql=}", sys.stderr)
+        print(f"{table_name=}", sys.stderr)
+        
+    if not isinstance(sql, str):
+        raise TypeError("run_sql: The 'sql' argument must be a string.")
+
+    if self.data is None:
+        if verbose:
+            print("run_sql: No data loaded in .data. The SQL query will run against an empty context.", file=sys.stderr)
+        # Proceed anyway, as the SQL might be creating a table or loading data
+        # self.data will remain None or be updated if the query is a CREATE TABLE etc.
+
+    try:
+        if verbose:
+            print(f"run_sql: Executing SQL query:\n{sql}", file=sys.stderr)
+            initial_row_count = self.data.shape[0] if self.data else 0
+
+        # It's safer to run the query directly, then determine how to update .data
+        # DuckDB's .sql() method returns a relation for SELECT queries,
+        # and None for DDL/DML queries.
+
+        # data_table = self._original_tablename # Let the user refer to the main table by its actual name
+                                                        # within the SQL string.
+        sql = sql.replace(table_name, self._original_tablename)
+
+        # Execute the SQL query
+        # We use self.cx.execute for more control, especially for DDL/DML.
+        # For SELECT, we can fetch the result.
+
+        # Identify if it's a SELECT query to handle result differently
+        is_select_query = sql.strip().upper().startswith('SELECT')
+
+        if is_select_query:
+            # For SELECT queries, we get a new relation.
+            # The user's query implicitly operates on self._original_tablename
+            # or expects to operate on some context.
+            # If the user's SQL is `SELECT * FROM my_table WHERE ...` where `my_table`
+            # is `self._original_tablename`, then we can run it.
+            # If it's a completely different SELECT, the result will replace self.data.
+
+            # Best approach for SELECT: Let the user provide the full SELECT query.
+            # The result of this query will then be materialized into our internal table.
+
+            # Check if the query refers to the current table.
+            # This is a heuristic and might not cover all cases.
+            # A more robust solution might involve parsing the SQL, but that's complex.
+            # For simplicity, assume the user's SQL string is a valid query.
+
+            # Execute the query and get the result as a relation
+            #
+            # self.cx.register(table_name, self.data)
+            print(f"run_sql: Executing changed SQL query:\n{sql}", file=sys.stderr)
+            new_data = self.cx.sql(sql)
+            # self.cx.unregister(table_name)
+
+            if new_data is None:
+                # This might happen if the SQL was not a SELECT, but .sql() sometimes returns None.
+                # Or if the query was empty.
+                raise ValueError("run_sql: The provided SQL query did not return a valid relation.")
+
+            # Materialize the result back into the original table name
+            # This ensures self.data always points to the named table.
+            # new_data.create_table(self._original_tablename, overwrite=True)
+            # self.data = self.cx.table(self._original_tablename)
+            self.data = new_data
+
+            if verbose:
+                final_row_count = self.data.shape[0]
+                print(f"run_sql: SELECT query executed. Data updated. New row count: {final_row_count}", file=sys.stderr)
+
+        else:
+            # For DDL/DML statements (INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, etc.)
+            # We execute directly. The changes should reflect in the underlying table
+            # that self.data points to.
+            self.cx.execute(sql)
+
+            # After DDL/DML, refresh the self.data relation from the table
+            # to ensure it reflects any changes made by the DML/DDL.
+            self.data = self.cx.table(self._original_tablename)
+
+            if verbose:
+                final_row_count = self.data.shape[0]
+                print(f"run_sql: Non-SELECT SQL query executed. Data refreshed. Current row count: {final_row_count}", file=sys.stderr)
+
+        return self
+
+    except Exception as e:
+        if verbose:
+            print(f"run_sql: An error occurred during SQL execution: {e}", file=sys.stderr)
+        raise ValueError(f"Failed to execute SQL query: {e}")
+    return self

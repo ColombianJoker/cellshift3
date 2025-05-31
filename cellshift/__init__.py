@@ -291,7 +291,7 @@ class CS:
 
 # Additional methods in accesory files
 from .columns import set_column_type, add_column, drop_column, replace_column, rename_column
-from .rows import add_data, remove_rows
+from .rows import add_data, remove_rows, filter_rows, sql
 from .auxiliary import letters_for, random_code, generate_kb_code, generate_mb_code, get_file_size
 from .destroy import fast_overwrite, destroy
 from .noise import add_gaussian_noise_column, add_impulse_noise_column, add_salt_pepper_noise_column
@@ -311,6 +311,9 @@ CS.add_data = add_data
 CS.remove_rows = remove_rows
 CS.remove_na_rows = remove_rows
 CS.remove_null_rows = remove_rows
+CS.filter_rows = filter_rows
+CS.filter = filter_rows
+CS.sql = sql
 CS.add_gaussian_noise_column = add_gaussian_noise_column
 CS.add_impulse_noise_column = add_impulse_noise_column
 CS.add_salt_pepper_noise_column = add_salt_pepper_noise_column
