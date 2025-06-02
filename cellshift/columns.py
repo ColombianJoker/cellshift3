@@ -91,7 +91,7 @@ def set_column_type(self,
                 print(f"change_column_type: Column '{actual_col_name_in_table}' type changed to '{type_input}'.", file=sys.stderr)
 
         # After all type changes, refresh self.data to reflect the new schema
-        self.data = self.cx.table(self._tablename)
+        # self.data = self.cx.table(self._tablename) # Non needed now
         if verbose:
             print(f"change_column_type: self.data refreshed. New columns/types: {self.data.columns}", file=sys.stderr)
 
@@ -104,11 +104,13 @@ def set_column_type(self,
 
     finally:
        pass
+    self.data = self.cx.table(self._tablename) 
     return self
 
 def add_column(self, 
                column_object: Union[pd.DataFrame, pl.DataFrame, pd.Series, np.ndarray, list, tuple, duckdb.DuckDBPyRelation, pa.Array], 
-               column_name: str) -> CS:
+               column_name: str,
+               verbose: bool = False) -> CS:
     """
     Adds a column to the CS object's data using a positional join.
 
@@ -117,6 +119,7 @@ def add_column(self,
                        DuckDB or PyArrow Array relation containing the data for the new column.
                        If DataFrame/Series, must have only one column (or be a 1D list/tuple).
         column_name: The name of the new column (string).
+        verbose: If True, print debug information.
 
     Returns:
         self: The CS object with the added column.
@@ -158,12 +161,14 @@ def add_column(self,
     # Register the  relation as a view in DuckDB.
     temp_view_name = f"_temp_df_{id(new_column_relation)}"  # Unique view name.
     self.cx.register(temp_view_name, new_column_relation)
-    # print(f"{temp_view_name=} registered!", file=sys.stderr)
+    # if verbose:
+        # print(f"{temp_view_name=} registered.", file=sys.stderr)
 
     # Get the number of rows in the original data
     original_num_rows = self.cx.execute(f"SELECT count(*) FROM \"{self._original_tablename}\"").fetchone()[0]
     new_column_length = self.cx.execute(f"SELECT count(*) FROM \"{temp_view_name}\"").fetchone()[0]
-    # print(f"{original_num_rows=}, {new_column_length=}", file=sys.stderr)
+    # if verbose:
+    #     print(f"{original_num_rows=}, {new_column_length=}", file=sys.stderr)
 
     if original_num_rows != new_column_length:
         self.cx.unregister(temp_view_name)
@@ -178,32 +183,36 @@ def add_column(self,
                      FROM "{self._original_tablename}" AS t1
                      POSITIONAL JOIN "{temp_view_name}" AS t2
                  """
-    # print(f"add_column: SQL Query: {sql_query=}", file=sys.stderr)
+    # if verbose:
+    #     print(f"add_column: SQL Query: {sql_query=}", file=sys.stderr)
 
     try:
         # Execute the query to add the column.
-        new_data = self.cx.execute(sql_query).fetch_arrow_table()
+        new_data = self.cx.sql(sql_query)
 
-        # Drop the existing table and create a new one from the result.
-        self.cx.execute(f"DROP TABLE IF EXISTS \"{self._tablename}\"")
-        self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM new_data;")
-        self.data = self.cx.table(self._tablename)
-        # return self
+        if (new_data) and isinstance(new_data, duckdb.duckdb.DuckDBPyRelation):
+            # Drop the existing table and create a new one from the result.
+            self.cx.execute(f"CREATE OR REPLACE TABLE \"{self._tablename}\" AS SELECT * FROM new_data;")
+            self.data = self.cx.table(self._tablename) 
+        return self
 
     finally:
         # Unregister the temporary view.
+        # if verbose:
+        #     print(f"add_column: unregister {temp_view_name=}", file=sys.stderr)
         self.cx.unregister(temp_view_name)
-        # print(f"add_column: Unregistered view {temp_view_name}", file=sys.stderr)
     return self
 
 def drop_column(self,
-                column_names: Union[str, List[str], Tuple[str]]) -> CS:
+                column_names: Union[str, List[str], Tuple[str]],
+                verbose: bool = False) -> CS:
     """
     Drops one or more columns from the CS object's data.
 
     Args:
         column_names: A string representing a single column name, or a list/tuple
                       of strings representing multiple column names to drop.
+        verbose: If True, print debug information.
 
     Returns:
         a new version of the CS object
@@ -233,30 +242,27 @@ def drop_column(self,
     columns_to_keep = [col for col in self.data.columns if col.lower() not in columns_to_drop_lower]
     if not columns_to_keep:
         raise ValueError("Cannot drop all columns.")
+    #
+    # original_table_name = self._original_tablename
+    # quoted_columns_to_keep = [f'"{col}"' for col in columns_to_keep]
+    # select_statement = ", ".join(quoted_columns_to_keep)
 
-    original_table_name = self._original_tablename
-    quoted_columns_to_keep = [f'"{col}"' for col in columns_to_keep]
-    select_statement = ", ".join(quoted_columns_to_keep)
-
-    sql_query = f""" SELECT {select_statement} FROM "{original_table_name}" """
-    # print(f"drop_column: SQL Query: {sql_query}", file=sys.stderr)
-
-    try:
-        # Execute the query to get the data with dropped columns.
-        new_data = self.cx.execute(sql_query).fetch_arrow_table()
-
-        # Drop the existing table and create a new one with the remaining columns.
-        self.cx.execute(f"DROP TABLE IF EXISTS \"{self._tablename}\"")
-        self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM new_data")
-        self.data = self.cx.table(self._tablename)
-
-    finally:
-        pass
+    for column_to_drop in columns_to_drop:
+      try:
+          sql_drop = f'ALTER TABLE "{self._tablename}" DROP COLUMN "{column_to_drop}";'
+          if verbose:
+              print(f"{sql_drop=}", file=sys.stderr)
+          new_data = self.cx.execute(sql_drop)
+      except Exception as e:
+          print(f"{e=}", file=sys.stderr)
+          pass
+    self.data = self.cx.table(self._tablename) 
     return self
 
 def replace_column(self, 
                    column_to_replace: Union[str, List[str], Tuple[str]], 
-                   replace_column: Union[str, List[str], Tuple[str]]) -> CS:
+                   replace_column: Union[str, List[str], Tuple[str]],
+                   verbose: bool = False) -> CS:
     """
     Replaces the contents of one or more columns with the data from another column or set of columns,
     preserving the original column order.
@@ -264,6 +270,7 @@ def replace_column(self,
     Args:
         column_to_replace: A string or list/tuple of strings representing the column(s) to be replaced.
         replace_column: A string or list/tuple of strings representing the column(s) to replace with.
+        verbose: If True, print debug information.
 
     Returns:
         a new version of the CS object
@@ -320,12 +327,15 @@ def replace_column(self,
 
     try:
         # Execute the query to get the transformed data.
-        new_data = self.cx.execute(sql_query).fetch_arrow_table()
+        # new_data = self.cx.execute(sql_query).fetch_arrow_table()
+        new_data = self.cx.sql(sql_query)
 
-        # Drop the existing table and create a new one with the replaced columns.
-        self.cx.execute(f"DROP TABLE IF EXISTS \"{self._tablename}\"")
-        self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM new_data")
-        self.data = self.cx.table(self._tablename)
+        if (new_data) and isinstance(new_data, duckdb.duckdb.DuckDBPyRelation):
+          # Drop the existing table and create a new one with the replaced columns.
+          # self.cx.execute(f"DROP TABLE IF EXISTS \"{self._tablename}\"")
+          # self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM new_data")
+          self.cx.execute(f"CREATE OR REPLACE TABLE \"{self._tablename}\" AS SELECT * FROM new_data")
+          self.data = self.cx.table(self._tablename)
 
     finally:
         pass

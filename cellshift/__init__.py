@@ -301,6 +301,7 @@ from .ranges import integer_range_column, age_range_column, float_range_column
 from .synthetic import add_syn_date_column
 
 CS.set_column_type = set_column_type
+CS.set_type = set_column_type
 CS.add_column = add_column
 CS.drop_column = drop_column
 CS.drop_columns = drop_column
