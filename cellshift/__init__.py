@@ -310,6 +310,7 @@ CS.rename_column = rename_column
 CS.rename_columns = rename_column
 CS.add_data = add_data
 CS.remove_rows = remove_rows
+CS.remove = remove_rows
 CS.remove_na_rows = remove_rows
 CS.remove_null_rows = remove_rows
 CS.filter_rows = filter_rows

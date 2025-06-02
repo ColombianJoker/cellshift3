@@ -136,33 +136,31 @@ def remove_rows(self,
         # Build the WHERE clause using the custom condition and meta-character replacement
         # Example: for condition='? < 0' and meta='?',
         #          it becomes '(NOT ("col1" < 0)) AND (NOT ("col2" < 0))'
-        conditions_for_sql = []
+        conditions_for_delete = []
         for col in columns_to_check:
             # Replace the meta-character with the quoted column name
             sql_condition_for_col = condition.replace(meta, f"\"{col}\"")
-            conditions_for_sql.append(f"(NOT ({sql_condition_for_col}))") # Wrap each condition in parentheses for safety
+            conditions_for_delete.append(f"({sql_condition_for_col})") # Wrap each condition in parentheses for safety
 
-        where_clause = " AND ".join(conditions_for_sql)
+        where_delete = " AND ".join(conditions_for_delete)
 
         if verbose:
-            print(f"remove_rows: Filtering rows where {where_clause}", file=sys.stderr)
+            print(f"remove_rows: Removing rows where {where_delete}", file=sys.stderr)
             initial_row_count = self.data.shape[0]
 
         # Construct the SQL query to select filtered rows
-        select_cols = ", ".join([f"\"{col}\"" for col in existing_columns])
-        filter_query_sql = f"SELECT {select_cols} FROM \"{self._original_tablename}\" WHERE {where_clause}"
+        delete_sql = f'DELETE FROM "{self._tablename}" WHERE {where_delete}'
 
         if verbose:
-            print(f"{filter_query_sql=}", file=sys.stderr)
+            print(f"{delete_sql=}", file=sys.stderr)
 
         # Execute the query and fetch the result as an Arrow Table
-        new_data = self.cx.execute(filter_query_sql).fetch_arrow_table()
-        # Drop the existing table and create a new one with the replaced columns.
-        self.cx.execute(f"DROP TABLE IF EXISTS \"{self._tablename}\"")
-        self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM new_data")
+        # new_data = self.cx.execute(filter_query_sql).fetch_arrow_table()
+        new_data = self.cx.sql(delete_sql)
         self.data = self.cx.table(self._tablename)
 
         if verbose:
+            print(f"{type(self.data)=}", file=sys.stderr)
             final_row_count = self.data.shape[0]
             rows_removed = initial_row_count - final_row_count
             print(f"remove_rows: Filtered successfully. {rows_removed} rows removed. New row count: {final_row_count}", file=sys.stderr)
