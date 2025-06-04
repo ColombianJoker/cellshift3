@@ -299,7 +299,7 @@ from .ranges import integer_range_column, age_range_column, float_range_column
 from .noise import add_gaussian_noise_column, add_impulse_noise_column, add_salt_pepper_noise_column
 from .noise import gaussian_column, impulse_column, salt_pepper_column
 from .synthetic import add_syn_date_column, add_syn_city_column
-from .synthetic import syn_date_column
+from .synthetic import syn_date_column, syn_city_column
 
 CS.set_column_type = set_column_type
 CS.set_type = set_column_type
@@ -333,3 +333,4 @@ CS.salt_pepper_column = salt_pepper_column
 CS.add_syn_date_column = add_syn_date_column
 CS.syn_date_column = syn_date_column
 CS.add_syn_city_column = add_syn_city_column
+CS.syn_city_column = syn_city_column
