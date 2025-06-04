@@ -78,7 +78,7 @@ def add_syn_date_column(self,
 
     # Initialize Faker with the class's locale
     faker_instance = Faker(self.faker_locale)
-    Faker.seed(self.seed)
+    Faker.seed(self.faker_seed)
     if verbose:
         print(f"add_syn_date_column: Initialized Faker with locale: '{self.faker_locale}'.", file=sys.stderr)
 
@@ -348,7 +348,7 @@ def add_syn_city_column(self,
       else:
           raise ValueError("add_syn_city_column: no new_column_name given and base_column is not valid.")
     fake=Faker(self.faker_locale)
-    Faker.seed(self.seed)
+    Faker.seed(self.faker_seed)
     if isinstance(base_column,str):
         # Get unique names in base_column
         n_uniques = self.cx.sql(f'SELECT COUNT(DISTINCT "{base_column}") FROM "{self._tablename}";').fetchall()[0][0]
@@ -495,7 +495,7 @@ def add_syn_name_column(self,
       else:
           raise ValueError("add_syn_name_column: no new_column_name given and base_column is not valid.")
     fake=Faker(self.faker_locale)
-    Faker.seed(self.seed)
+    Faker.seed(self.faker_seed)
     if isinstance(base_column,str):
         # Get unique names in base_column
         n_uniques = self.cx.sql(f'SELECT COUNT(DISTINCT "{base_column}") FROM "{self._tablename}";').fetchall()[0][0]

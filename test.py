@@ -10,5 +10,4 @@ df = pandas.DataFrame({
 ob = CS(df)
 ob.data.show()
 ob.add_syn_name_column("persona", "otro")
-  .add_syn_name_column("persona", "tercero", max_uniques=0)
 ob.data.show()

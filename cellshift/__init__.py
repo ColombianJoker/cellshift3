@@ -25,7 +25,7 @@ class CS:
     """
     Class that loads data, generates a unique table name, and provides
     methods to get the data as Pandas/Polars DataFrames, and save to
-    CSV/DuckDB.  Try to maintain only one DuckDB connection for everything.
+    CSV/DuckDB. Try to maintain only one DuckDB connection for everything.
     """
     def __init__(self,
                  input_data: Union[str, List[str], pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame, pa.Table],
@@ -38,20 +38,21 @@ class CS:
             db_path: The path to the DuckDB database file to use.
                      Defaults to ':memory:' for an in-memory database.
         """
-        self.db_path = db_path                             # Store the database path
+        self.db_path = db_path
         self.temp_dir = tempfile.mkdtemp()
-        self.cx: DuckDBPyConnection = duckdb.connect(database=self.db_path,
-                                      read_only=False,
-                                      config={"temp_directory": self.temp_dir, },
-        ) # Initialize
-        self._tablename: str = next(_table_name_gen)       # Generate table name *before* loading
-        self._original_tablename: str = self._tablename    # store original table name
-        self.seed = 25                                     # For random generation
+        self.cx: duckdb.DuckDBPyConnection = duckdb.connect(database=self.db_path,
+                                          read_only=False,
+                                          config={"temp_directory": self.temp_dir})
+
+        self._tablename: str = next(_table_name_gen)
+        self._original_tablename: str = self._tablename
+
+        # Initialize faker_seed with a default value of 25
+        self._faker_seed: int = 25
 
         # Call _load_data, to make sure the data is materialized into a named
         # table and return the relation for that table.
         while True:
-            # print(f"{self._tablename=}", file=sys.stderr)
             try:
                 self._original_tablename: str = self._tablename
                 self.data: Optional[duckdb.DuckDBPyRelation] = self._load_data(input_data)
@@ -59,12 +60,12 @@ class CS:
             except duckdb.CatalogException as e:
                 print(f"{e=}", file=sys.stderr)
                 self._tablename = next(_table_name_gen) # will try next name
-        self._faker_locale: str = "es_CO"          # Initialize with default 'Colombia'
-        self._equiv: Dict[str, Any] = {}           # For equivalence tables 'unused'
+        self._faker_locale: str = "es_CO" # Initialize with default 'Colombia'
+
 
     def _load_data(self,
-                   data: Union[str, List[str], pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame],
-                   verbose: bool = False) -> Optional[duckdb.DuckDBPyRelation]:
+                    data: Union[str, List[str], pd.DataFrame, duckdb.DuckDBPyRelation, pl.DataFrame],
+                    verbose: bool = False) -> Optional[duckdb.DuckDBPyRelation]:
         """
         Internal method to load data and return a DuckDB relation or None.
         Ensures the data is materialized into a named table within the DuckDB connection.
@@ -123,7 +124,7 @@ class CS:
             relation = self.cx.table(self._tablename)
             return relation
         except duckdb.CatalogException as e:
-          raise e
+            raise e
         except Exception as e:
             print(f"An error occurred during loading: {e}", file=sys.stderr)
             return None
@@ -269,27 +270,27 @@ class CS:
         self._faker_locale = locale
 
     @property
-    def equiv(self) -> Dict[str, Any]:
+    def faker_seed(self) -> int:
         """
-        Getter for the equiv attribute.
+        Getter for the faker_seed attribute.
         Returns:
-            The current equivalence dictionary.
+            The current Faker seed integer.
         """
-        return self._equiv
+        return self._faker_seed
 
-    @equiv.setter
-    def equiv(self, new_equiv: Dict[str, Any]) -> None:
+    @faker_seed.setter
+    def faker_seed(self, seed: int) -> None:
         """
-        Setter for the equiv attribute.
+        Setter for the faker_seed attribute.
         Args:
-            new_equiv: The new equivalence dictionary.
+            seed: The new integer seed for Faker.
         Raises:
-            TypeError: If the provided value is not a dictionary.
+            ValueError: If the provided seed is not an integer.
         """
-        if not isinstance(new_equiv, dict):
-            raise TypeError("Equivalence mapping must be a dictionary.")
-        self._equiv = new_equiv
-
+        if not isinstance(seed, int):
+            raise ValueError("Faker seed must be an integer.")
+        self._faker_seed = seed
+        
 # Additional methods in accesory files
 from .columns import set_column_type, add_column, drop_column, replace_column, rename_column
 from .rows import add_data, remove_rows, filter_rows, sql
