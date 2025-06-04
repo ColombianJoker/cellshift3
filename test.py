@@ -3,13 +3,12 @@ from cellshift import CS
 
 df = pandas.DataFrame({
   "id": [i for i in range(1,12+1)],
-  "pob": [ "Armenia", "Barranquilla", "Bello", "Bogotá", 
-           "Bucaramanga", "Barranquilla", "Cartagena", "Cúcuta", 
-           "Ibagué", "Manizales", "Pereira", "Santa Marta", ]
+  "persona": [ "Jorge Molano", "Felix Padilla", "John Mendoza", "Sebastián Perdomo", 
+               "Alejandro Álvarez", "Enrique Caro", "Wilson Pérez", "Patricia Cifuentes", 
+               "Milton García", "Ángela Cortés", "Marco Mesa", "Dary Castrillón", ]
 })
 ob = CS(df)
 ob.data.show()
-ob.add_syn_city_column("pob")
+ob.add_syn_name_column("persona", "otro")
+  .add_syn_name_column("persona", "tercero", max_uniques=0)
 ob.data.show()
-print()
-ob.city_equivalences.show()

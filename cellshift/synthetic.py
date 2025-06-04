@@ -78,6 +78,7 @@ def add_syn_date_column(self,
 
     # Initialize Faker with the class's locale
     faker_instance = Faker(self.faker_locale)
+    Faker.seed(self.seed)
     if verbose:
         print(f"add_syn_date_column: Initialized Faker with locale: '{self.faker_locale}'.", file=sys.stderr)
 
@@ -334,7 +335,7 @@ def add_syn_city_column(self,
         base_column: the name a column to base the generation
         new_column_name: The name of the new synthetic city column. If None, defaults to
                          "syn_{base_column}" if `base_column` is provided, otherwise an error.
-        max_uniques: max number of names save equivalence table
+        max_uniques: Maximum number of unique base_column values to save in an equivalence table.
         verbose: if to show debug messages   
 
     Returns:
@@ -347,7 +348,7 @@ def add_syn_city_column(self,
       else:
           raise ValueError("add_syn_city_column: no new_column_name given and base_column is not valid.")
     fake=Faker(self.faker_locale)
-    Faker.seed(42)
+    Faker.seed(self.seed)
     if isinstance(base_column,str):
         # Get unique names in base_column
         n_uniques = self.cx.sql(f'SELECT COUNT(DISTINCT "{base_column}") FROM "{self._tablename}";').fetchall()[0][0]
@@ -465,6 +466,153 @@ def syn_city_column(self,
                 print(f"syn_city_column: Successfully dropped temporary column '{new_syn_column_name}'.", file=sys.stderr)
         except Exception as e:
             print(f"syn_city_column: Error dropping temporary column '{new_syn_column_name}': {e}", file=sys.stderr)
+            raise
+
+        return self
+        
+def add_syn_name_column(self, 
+                        base_column: str, 
+                        new_column_name: Optional[str] = None, 
+                        max_uniques: Optional[int] = 1000,
+                        verbose: bool = False) -> CS:
+    """
+    Add a new column with synthetic generated person names
+    
+    Args:
+        base_column: the name a column to base the generation
+        new_column_name: The name of the new synthetic city column. If None, defaults to
+                         "syn_{base_column}" if `base_column` is provided, otherwise an error.
+        max_uniques: Maximum number of unique base_column values to save in an equivalence table.
+        verbose: if to show debug messages   
+
+    Returns:
+        self: The CS object with the 'base_column' replaced by synthetic date values.
+    """
+
+    if (new_column_name is None):
+      if (isinstance(base_column, str)):
+          new_column_name = f"syn_{base_column}"
+      else:
+          raise ValueError("add_syn_name_column: no new_column_name given and base_column is not valid.")
+    fake=Faker(self.faker_locale)
+    Faker.seed(self.seed)
+    if isinstance(base_column,str):
+        # Get unique names in base_column
+        n_uniques = self.cx.sql(f'SELECT COUNT(DISTINCT "{base_column}") FROM "{self._tablename}";').fetchall()[0][0]
+        if verbose:
+          print(f"add_syn_name_column: processing '{self._tablename}', with {n_uniques} values.", file=sys.stderr)
+        if n_uniques>max_uniques:
+            try:
+                # Generate without equivalences
+                add_column_sql = f'ALTER TABLE "{self._tablename}" ADD COLUMN "{new_column_name}" VARCHAR;'
+                self.cx.sql(add_column_sql)
+                self.data = self.cx.table(self._tablename)
+                if verbose:
+                    print(f"{self.data.columns=}", file=sys.stderr)
+                    print(self.cx.sql(f'SELECT COUNT(*) FROM "{self._tablename}";').fetchone()[0], file=sys.stderr)
+                all_count = self.cx.sql(f'SELECT COUNT(*) FROM "{self._tablename}";').fetchone()[0]
+                for row_id in tqdm(range(all_count),
+                                   disable=not (verbose and (n_uniques>1000))):
+                    fake_city=fake.name()
+                    # update_sql = f'UPDATE "{self._tablename}" SET "{new_column_name}"="{fake_city}" WHERE rowid=={row_id};'
+                    update_sql = f"UPDATE \"{self._tablename}\" SET \"{new_column_name}\"='{fake_city}' WHERE rowid=={row_id};"
+                    # if verbose:
+                    #     print(f"{update_sql=}", file=sys.stderr)
+                    self.cx.execute(update_sql)
+            except Exception as e:
+                printf(f"{e=}", file=sys.stderr)
+                raise Exception
+        else: # So little cities that can be saved the equivalences
+            try:
+                new_table_name = "city_equivalences" # f"temp_city_{self._tablename}"
+                create_temp_sql = f"""
+                    CREATE TABLE "{new_table_name}" AS
+                    SELECT DISTINCT
+                        "{base_column}",
+                        CAST(NULL AS VARCHAR) AS "{new_column_name}"
+                    FROM
+                        "{self._tablename}";
+                """
+                if verbose:
+                    print(f"{create_temp_sql=}", file=sys.stderr)
+                self.cx.execute(create_temp_sql) # Create table for equivalences
+                for row_id in tqdm(range(n_uniques),
+                                   disable=not (verbose and (n_uniques>1000))):
+                    fake_name=fake.name()
+                    update_sql = f"UPDATE \"{new_table_name}\" SET \"{new_column_name}\"='{fake_name}' WHERE rowid=={row_id};"
+                    if verbose:
+                        print(f"{update_sql=}", file=sys.stderr)
+                    self.cx.execute(update_sql)
+                update_syn_names = f"""
+                    UPDATE "{self._tablename}"
+                    SET "{new_column_name}"="{new_table_name}"."{new_column_name}"
+                    FROM "{new_table_name}" 
+                    WHERE "{self._tablename}"."{base_column}"=="{new_table_name}"."{base_column}"
+                """
+                add_column_sql = f'ALTER TABLE "{self._tablename}" ADD COLUMN "{new_column_name}" VARCHAR;'
+                if verbose:
+                    print(f"{add_column_sql=}", file=sys.stderr)
+                    print(f"{update_syn_names=}", file=sys.stderr)
+                self.cx.sql(add_column_sql)
+                self.data = self.cx.table(self._tablename)
+                self.cx.execute(update_syn_names)
+                self.data = self.cx.table(self._tablename)
+                self.name_equivalences = self.cx.table(new_table_name)
+            except Exception as e:
+                printf(f"{e=}", file=sys.stderr)
+                raise Exception
+    return self
+
+def syn_name_column(self,
+                    base_column: str,
+                    max_uniques: Optional[int] = 1000,
+                    verbose: bool = False) -> 'CS':
+        """
+        Replaces a base_column with a new column containing synthetic generated person names.
+
+        Args:
+            base_column: The name of the column to be replaced.
+            max_uniques: Maximum number of unique base_column values to save in an equivalence table.
+            verbose: If True, print debug messages.
+
+        Returns:
+            self: The CS object with the 'base_column' replaced by synthetic person names.
+        """
+        new_syn_column_name = f"syn_{base_column}"
+
+        if verbose:
+            print(f"syn_name_column: Replacing '{base_column}' with synthetic cities.", file=sys.stderr)
+
+        # Add a new column 'syn_{base_column}' using add_syn_city_column
+        try:
+            self.add_syn_name_column(
+                base_column=base_column,
+                new_column_name=new_syn_column_name,
+                max_uniques=max_uniques,
+                verbose=verbose
+            )
+            if verbose:
+                print(f"syn_name_column: Successfully added '{new_syn_column_name}'.", file=sys.stderr)
+        except Exception as e:
+            print(f"syn_name_column: Error adding synthetic column: {e}", file=sys.stderr)
+            raise
+
+        # Replace the original base_column with the new 'syn_{base_column}'
+        try:
+            self.replace_column(base_column, new_syn_column_name)
+            if verbose:
+                print(f"syn_name_column: Successfully replaced '{base_column}' with '{new_syn_column_name}'.", file=sys.stderr)
+        except Exception as e:
+            print(f"syn_name_column: Error replacing column: {e}", file=sys.stderr)
+            raise
+
+        # Remove the column that was added with .add_syn_city_column.
+        try:
+            self.drop_column(new_syn_column_name)
+            if verbose:
+                print(f"syn_name_column: Successfully dropped temporary column '{new_syn_column_name}'.", file=sys.stderr)
+        except Exception as e:
+            print(f"syn_name_column: Error dropping temporary column '{new_syn_column_name}': {e}", file=sys.stderr)
             raise
 
         return self
