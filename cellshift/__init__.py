@@ -291,13 +291,13 @@ class CS:
 
 # Additional methods in accesory files
 from .columns import set_column_type, add_column, drop_column, replace_column, rename_column
-from .rows import add_data, remove_rows, filter_rows, run_sql
+from .rows import add_data, remove_rows, filter_rows, sql
 from .auxiliary import letters_for, random_code, generate_kb_code, generate_mb_code, get_file_size
 from .destroy import fast_overwrite, destroy
-from .noise import add_gaussian_noise_column, add_impulse_noise_column, add_salt_pepper_noise_column
-from .noise import gaussian_column, impulse_column, salt_pepper_column
 from .ranges import add_integer_range_column, add_age_range_column, add_float_range_column
 from .ranges import integer_range_column, age_range_column, float_range_column
+from .noise import add_gaussian_noise_column, add_impulse_noise_column, add_salt_pepper_noise_column
+from .noise import gaussian_column, impulse_column, salt_pepper_column
 from .synthetic import add_syn_date_column
 
 CS.set_column_type = set_column_type
@@ -311,22 +311,22 @@ CS.rename_columns = rename_column
 CS.add_data = add_data
 CS.remove_rows = remove_rows
 CS.remove = remove_rows
-CS.remove_na_rows = remove_rows
-CS.remove_null_rows = remove_rows
+CS.remove_na = remove_rows
+CS.remove_null = remove_rows
 CS.filter_rows = filter_rows
 CS.filter = filter_rows
-CS.run_sql = run_sql
-CS.sql = run_sql
-CS.add_gaussian_noise_column = add_gaussian_noise_column
-CS.add_impulse_noise_column = add_impulse_noise_column
-CS.add_salt_pepper_noise_column = add_salt_pepper_noise_column
-CS.gaussian_column = gaussian_column
-CS.impulse_column = impulse_column
-CS.salt_pepper_column = salt_pepper_column
+CS.sql = sql
+CS.exec = sql
 CS.add_integer_range_column = add_integer_range_column
 CS.add_age_range_column = add_age_range_column
 CS.add_float_range_column = add_float_range_column
 CS.integer_range_column = integer_range_column
 CS.age_range_column = age_range_column
 CS.float_range_column = float_range_column
+CS.add_gaussian_noise_column = add_gaussian_noise_column
+CS.add_impulse_noise_column = add_impulse_noise_column
+CS.add_salt_pepper_noise_column = add_salt_pepper_noise_column
+CS.gaussian_column = gaussian_column
+CS.impulse_column = impulse_column
+CS.salt_pepper_column = salt_pepper_column
 CS.add_syn_date_column = add_syn_date_column

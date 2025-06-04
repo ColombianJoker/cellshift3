@@ -8,7 +8,9 @@ from typing import Generator, Union, Optional
 import sys
 from . import CS  # Import CS from the main module to be able to return self with typing
 
-def add_gaussian_noise_column(self, base_column: str, new_column_name: str = None) -> CS:
+def add_gaussian_noise_column(self,
+                              base_column: str, 
+                              new_column_name: str = None) -> CS:
     """
     Adds a new column containing Gaussian noise to the CS object's data,
     based on the statistics of an existing column.
@@ -16,8 +18,7 @@ def add_gaussian_noise_column(self, base_column: str, new_column_name: str = Non
     Args:
         base_column: The name of the column to use for calculating the
                      mean and standard deviation of the noise.
-        new_column_name: The name of the new column.  If None, defaults to
-                         "noise_{base_column}".
+        new_column_name: The name of the new column.  If None, defaults to "noise_{base_column}".
 
     Returns:
         self: The CS object with the added Gaussian noise column.
@@ -72,10 +73,14 @@ def add_gaussian_noise_column(self, base_column: str, new_column_name: str = Non
         # print("3: add_gaussian_noise_column: End", file=sys.stderr)
     return self
 
-def add_impulse_noise_column(self, base_column: str, new_column_name: Optional[str] = None,
-                             sample_pct: Optional[float] = None, n_samples: Optional[int] = None,
-                             impulse_mag: Optional[Union[int, float]] = None, impulse_pct: Optional[float] = None,
-                             verbose: bool = False) -> CS:
+def add_impulse_noise_column(self,
+                              base_column: str, 
+                              new_column_name: Optional[str] = None,
+                              sample_pct: Optional[float] = None, 
+                              n_samples: Optional[int] = None,
+                              impulse_mag: Optional[Union[int, float]] = None, 
+                              impulse_pct: Optional[float] = None,
+                              verbose: bool = False) -> CS:
     """
     Adds a new column containing impulse noise to the CS object's data,
     basing its values from a preexisting one. The base column must be numeric,
@@ -178,6 +183,8 @@ def add_impulse_noise_column(self, base_column: str, new_column_name: Optional[s
         for i in tqdm(range(num_samples_to_alter), disable=not verbose, desc="Applying impulse noise"):
             row_id = random_row_ids[i]
             noise_amount = noise_amounts[i]
+            if verbose:
+                print(f"add_impulse_noise_column: add {noise_amount} to row {row_id}", file=sys.stderr)
             update_sql = f"""
                 UPDATE \"{self._tablename}\"
                 SET \"{new_column_name}\" = \"{new_column_name}\" + {noise_amount}
@@ -199,9 +206,12 @@ def add_impulse_noise_column(self, base_column: str, new_column_name: Optional[s
         # print("7: add_impulse_noise_column: End", file=sys.stderr)
     return self
     
-def add_salt_pepper_noise_column(self, base_column: str, new_column_name: Optional[str] = None,
-                                 sample_pct: Optional[float] = None, n_samples: Optional[int] = None,
-                                 verbose: bool = False) -> CS:
+def add_salt_pepper_noise_column(self, 
+                                  base_column: str, 
+                                  new_column_name: Optional[str] = None,
+                                  sample_pct: Optional[float] = None, 
+                                  n_samples: Optional[int] = None,
+                                  verbose: bool = False) -> CS:
     """
     Adds a new column containing salt-and-pepper noise to the CS object's data.
     Selected values in the new column will be set to the min or max of the base column.

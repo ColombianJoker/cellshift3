@@ -11,7 +11,7 @@ from . import CS  # Import CS from the main module to be able to return self wit
 
 def add_data(self,
              data: Union[str, List[str], pd.DataFrame, pl.DataFrame, pa.Table],
-             verbose: bool = False) -> 'CS':
+             verbose: bool = False) -> CS:
     """
     Adds new data to the existing .data member of the class.
     The new data is added using INSERT into current data.
@@ -72,10 +72,11 @@ def add_data(self,
     return self
 
 def remove_rows(self,
-                   base_column: Union[str, List[str]],
-                   condition: str = '? IS NULL',
-                   meta: str = '?',
-                   verbose: bool = False) -> 'CS':
+                 base_column: Union[str, List[str]],
+                 condition: str = '? IS NULL',
+                 meta: str = '?',
+                 all_and: bool = True,
+                 verbose: bool = False) -> CS:
     """
     Removes rows from the .data member based on a custom SQL condition applied to specified columns,
             defaulting to removing rows where the column is NULL.
@@ -88,6 +89,10 @@ def remove_rows(self,
                    Defaults to '? IS NULL' to remove rows where the column is NULL.
         meta: The meta-character string within the 'condition' that will be replaced
               by the actual column name. Defaults to '?'.
+        all_and: if True, applies the condition using AND to all columns mentioned in base_column, like this:
+                 SELECT * FROM TABLE WHERE CONDITION(COLUMN1) AND CONDITION(COLUMN2) ...
+                 if False, applies the condition using OR to all columns mentioned in base_column, like this:
+                 SELECT * FROM TABLE WHERE CONDITION(COLUMN1) OR CONDITION(COLUMN2) ...
         verbose: If True, print debug information.
 
     Returns:
@@ -141,8 +146,10 @@ def remove_rows(self,
             # Replace the meta-character with the quoted column name
             sql_condition_for_col = condition.replace(meta, f"\"{col}\"")
             conditions_for_delete.append(f"({sql_condition_for_col})") # Wrap each condition in parentheses for safety
-
-        where_delete = " AND ".join(conditions_for_delete)
+        if all_and:
+          where_delete = " AND ".join(conditions_for_delete)
+        else: # if not and then OR
+          where_delete = " OR ".join(conditions_for_delete)
 
         if verbose:
             print(f"remove_rows: Removing rows where {where_delete}", file=sys.stderr)
@@ -175,10 +182,11 @@ def remove_rows(self,
     return self
 
 def filter_rows(self,
-                   base_column: Union[str, List[str]],
-                   condition: str = '? IS NOT NULL',
-                   meta: str = '?',
-                   verbose: bool = False) -> 'CS':
+                 base_column: Union[str, List[str]],
+                 condition: str = '? IS NOT NULL',
+                 meta: str = '?',
+                 all_and: bool = True,
+                 verbose: bool = False) -> CS:
     """
     Filters rows from the .data member based on a custom SQL condition applied to specified columns,
         leaving only rows where the condition is met, defaulting to removing rows where the column is NULL.
@@ -191,6 +199,10 @@ def filter_rows(self,
                    Defaults to '? IS NULL' to remove rows where the column is NULL.
         meta: The meta-character string within the 'condition' that will be replaced
               by the actual column name. Defaults to '?'.
+        all_and: if True, applies the condition using AND to all columns mentioned in base_column, like this:
+                 SELECT * FROM TABLE WHERE CONDITION(COLUMN1) AND CONDITION(COLUMN2) ...
+                 if False, applies the condition using OR to all columns mentioned in base_column, like this:
+                 SELECT * FROM TABLE WHERE CONDITION(COLUMN1) OR CONDITION(COLUMN2) ...
         verbose: If True, print debug information.
 
     Returns:
@@ -245,7 +257,10 @@ def filter_rows(self,
             sql_condition_for_col = condition.replace(meta, f"\"{col}\"")
             conditions_for_sql.append(f"({sql_condition_for_col})") # Wrap each condition in parentheses for safety
 
-        where_clause = " AND ".join(conditions_for_sql)
+        if all_and:
+          where_clause = " AND ".join(conditions_for_sql)
+        else: # if not AND then OR
+          where_clause = " OR ".join(conditions_for_sql)
 
         if verbose:
             print(f"remove_rows: Filtering rows where {where_clause}", file=sys.stderr)
@@ -253,17 +268,21 @@ def filter_rows(self,
 
         # Construct the SQL query to select filtered rows
         select_cols = ", ".join([f"\"{col}\"" for col in existing_columns])
-        filter_query_sql = f"SELECT {select_cols} FROM \"{self._original_tablename}\" WHERE {where_clause}"
-
+        # filter_query_sql = f"SELECT {select_cols} FROM \"{self._original_tablename}\" WHERE {where_clause}"
+        filter_query_sql = f'SELECT * FROM "{self._tablename}" WHERE {where_clause}'
+        
         if verbose:
             print(f"{filter_query_sql=}", file=sys.stderr)
 
         # Execute the query and fetch the result as an Arrow Table
-        new_data = self.cx.execute(filter_query_sql).fetch_arrow_table()
+        # new_data = self.cx.execute(filter_query_sql).fetch_arrow_table()
+        new_data = self.cx.sql(filter_query_sql)
         # Drop the existing table and create a new one with the replaced columns.
-        self.cx.execute(f"DROP TABLE IF EXISTS \"{self._tablename}\"")
-        self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM new_data")
-        self.data = self.cx.table(self._tablename)
+        # self.cx.execute(f"DROP TABLE IF EXISTS \"{self._tablename}\"")
+        # self.cx.execute(f"CREATE TABLE \"{self._tablename}\" AS SELECT * FROM new_data")
+        if (new_data) and isinstance(new_data, duckdb.duckdb.DuckDBPyRelation):
+          self.cx.execute(f"CREATE OR REPLACE TABLE \"{self._tablename}\" AS SELECT * FROM new_data")
+          self.data = self.cx.table(self._tablename)
 
         if verbose:
             final_row_count = self.data.shape[0]
@@ -279,10 +298,11 @@ def filter_rows(self,
         raise ValueError(f"Failed to remove rows based on condition: {e}")
     return self
 
-def run_sql(self,
-        sql: str,
+def sql(self,
+        sql_sentence: str,
         table_name: str = 'TABLE',
-        verbose: bool = False) -> 'CS':
+        in_place: bool = True,
+        verbose: bool = False) -> Union[CS,duckdb.duckdb.DuckDBPyRelation]:
     """
     Runs a given SQL query on the current .data member and updates .data
     with the result of the query. Uses the name in 'table_name' for .data member (defaults to 'TABLE')
@@ -297,29 +317,31 @@ def run_sql(self,
     For other statements, the .data relation is refreshed from the underlying table.
 
     Args:
-        sql: The SQL query string to execute.
+        sql_sentence: The SQL query string to execute.
         table_name: the name used for the .data member in SQL sentences
+        in_place: if True, updates data member if the SQL sentence is a valid result set
         verbose: If True, print debug information.
 
     Returns:
-        self: The CS object with the .data member updated according to the SQL query.
+        self: The CS object with the .data member updated according to the SQL query (if in_place=True) OR
+              A new DuckDB relation with the SQL result set (if in_place=False)
     """
     if verbose:
-        print(f"{sql=}", sys.stderr)
+        print(f"{sql_sentence=}", sys.stderr)
         print(f"{table_name=}", sys.stderr)
         
-    if not isinstance(sql, str):
-        raise TypeError("run_sql: The 'sql' argument must be a string.")
+    if not isinstance(sql_sentence, str):
+        raise TypeError("sql: The 'sql_sentence' argument must be a string.")
 
     if self.data is None:
         if verbose:
-            print("run_sql: No data loaded in .data. The SQL query will run against an empty context.", file=sys.stderr)
+            print("sql: No data loaded in .data. The SQL query will run against an empty context.", file=sys.stderr)
         # Proceed anyway, as the SQL might be creating a table or loading data
         # self.data will remain None or be updated if the query is a CREATE TABLE etc.
 
     try:
         if verbose:
-            print(f"run_sql: Executing SQL query:\n{sql}", file=sys.stderr)
+            print(f"sql: Executing SQL query:\n{sql_sentence}", file=sys.stderr)
             initial_row_count = self.data.shape[0] if self.data else 0
 
         # It's safer to run the query directly, then determine how to update .data
@@ -328,14 +350,14 @@ def run_sql(self,
 
         # data_table = self._original_tablename # Let the user refer to the main table by its actual name
                                                         # within the SQL string.
-        sql = sql.replace(table_name, self._original_tablename)
+        sql_sentence = sql_sentence.replace(table_name, self._original_tablename)
 
         # Execute the SQL query
         # We use self.cx.execute for more control, especially for DDL/DML.
         # For SELECT, we can fetch the result.
 
         # Identify if it's a SELECT query to handle result differently
-        is_select_query = sql.strip().upper().startswith('SELECT')
+        is_select_query = sql_sentence.strip().upper().startswith('SELECT')
 
         if is_select_query:
             # For SELECT queries, we get a new relation.
@@ -357,30 +379,36 @@ def run_sql(self,
             #
             # self.cx.register(table_name, self.data)
             if verbose:
-                print(f"run_sql: Executing changed SQL query:\n{sql}", file=sys.stderr)
-            new_data = self.cx.sql(sql)
+                print(f"sql: Executing changed SQL query:\n{sql_sentence}", file=sys.stderr)
+            new_data = self.cx.sql(sql_sentence)
             # self.cx.unregister(table_name)
 
             if new_data is None:
                 # This might happen if the SQL was not a SELECT, but .sql() sometimes returns None.
                 # Or if the query was empty.
-                raise ValueError("run_sql: The provided SQL query did not return a valid relation.")
+                raise ValueError("sql: The provided SQL query did not return a valid relation.")
 
             # Materialize the result back into the original table name
             # This ensures self.data always points to the named table.
             # new_data.create_table(self._original_tablename, overwrite=True)
             # self.data = self.cx.table(self._original_tablename)
-            self.data = new_data
-
             if verbose:
                 final_row_count = self.data.shape[0]
-                print(f"run_sql: SELECT query executed. Data updated. New row count: {final_row_count}", file=sys.stderr)
+                if in_place:
+                    print(f"sql: SELECT query executed. Data updated. New row count: {final_row_count}", file=sys.stderr)
+                else:
+                    print(f"sql: SELECT query executed. Data returned. Returned row count: {final_row_count}", file=sys.stderr)
+
+            if in_place:
+                self.data = new_data
+            else:
+                return new_data
 
         else:
             # For DDL/DML statements (INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, etc.)
             # We execute directly. The changes should reflect in the underlying table
             # that self.data points to.
-            self.cx.execute(sql)
+            self.cx.execute(sql_sentence)
 
             # After DDL/DML, refresh the self.data relation from the table
             # to ensure it reflects any changes made by the DML/DDL.
