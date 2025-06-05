@@ -303,7 +303,7 @@ from .noise import gaussian_column, impulse_column, salt_pepper_column
 from .synthetic import add_syn_date_column, add_syn_city_column, add_syn_name_column
 from .synthetic import add_syn_first_name_column, add_syn_last_name_column, add_syn_class_column
 from .synthetic import syn_date_column, syn_city_column, syn_name_column
-from .synthetic import syn_first_name_column, syn_last_name_column
+from .synthetic import syn_first_name_column, syn_last_name_column, syn_class_column
 
 CS.set_column_type = set_column_type
 CS.set_type = set_column_type
@@ -345,3 +345,4 @@ CS.syn_first_name_column = syn_first_name_column
 CS.add_syn_last_name_column = add_syn_last_name_column
 CS.syn_last_name_column = syn_last_name_column
 CS.add_syn_class_column = add_syn_class_column
+CS.syn_class_column = syn_class_column

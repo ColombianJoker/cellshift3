@@ -13,6 +13,7 @@ df = pandas.DataFrame({
               "F", "M", "F",], })
 ob = CS(df)
 ob.data.show()
-ob.add_syn_class_column("género", "clase")
+ob.add_syn_class_column("género", "clase")\
+  .syn_class_column("persona", max_uniques=0)
 ob.data.show()
 ob.class_equivalences.show()

@@ -380,7 +380,7 @@ def add_syn_city_column(self,
             try:
                 new_table_name = "city_equivalences" # f"temp_city_{self._tablename}"
                 create_temp_sql = f"""
-                    CREATE TABLE "{new_table_name}" AS
+                    CREATE OR REPLACE TABLE "{new_table_name}" AS
                     SELECT DISTINCT
                         "{base_column}",
                         CAST(NULL AS VARCHAR) AS "{new_column_name}"
@@ -526,7 +526,7 @@ def add_syn_name_column(self,
             try:
                 new_table_name = "city_equivalences" # f"temp_city_{self._tablename}"
                 create_temp_sql = f"""
-                    CREATE TABLE "{new_table_name}" AS
+                    CREATE OR REPLACE TABLE "{new_table_name}" AS
                     SELECT DISTINCT
                         "{base_column}",
                         CAST(NULL AS VARCHAR) AS "{new_column_name}"
@@ -672,7 +672,7 @@ def add_syn_first_name_column(self,
             try:
                 new_table_name = "city_equivalences" # f"temp_city_{self._tablename}"
                 create_temp_sql = f"""
-                    CREATE TABLE "{new_table_name}" AS
+                    CREATE OR REPLACE TABLE "{new_table_name}" AS
                     SELECT DISTINCT
                         "{base_column}",
                         CAST(NULL AS VARCHAR) AS "{new_column_name}"
@@ -818,7 +818,7 @@ def add_syn_last_name_column(self,
             try:
                 new_table_name = "city_equivalences" # f"temp_city_{self._tablename}"
                 create_temp_sql = f"""
-                    CREATE TABLE "{new_table_name}" AS
+                    CREATE OR REPLACE TABLE "{new_table_name}" AS
                     SELECT DISTINCT
                         "{base_column}",
                         CAST(NULL AS VARCHAR) AS "{new_column_name}"
@@ -966,7 +966,7 @@ def add_syn_class_column(self,
             try:
                 new_table_name = "class_equivalences" # f"temp_city_{self._tablename}"
                 create_temp_sql = f"""
-                    CREATE TABLE "{new_table_name}" AS
+                    CREATE OR REPLACE TABLE "{new_table_name}" AS
                     SELECT DISTINCT
                         "{base_column}",
                         CAST(NULL AS VARCHAR) AS "{new_column_name}"
@@ -1002,4 +1002,58 @@ def add_syn_class_column(self,
                 print(f"{e=}", file=sys.stderr)
                 raise Exception
     return self
-    
+
+def syn_class_column(self,
+                    base_column: str,
+                    max_uniques: Optional[int] = 1000,
+                    verbose: bool = False) -> 'CS':
+        """
+        Replaces a base_column with a new column containing synthetic generated classes.
+
+        Args:
+            base_column: The name of the column to be replaced.
+            max_uniques: Maximum number of unique base_column values to save in an equivalence table.
+            verbose: If True, print debug messages.
+
+        Returns:
+            self: The CS object with the 'base_column' replaced by synthetic classes.
+        """
+        new_syn_column_name = f"syn_{base_column}"
+
+        if verbose:
+            print(f"syn_first_name_column: Replacing '{base_column}' with synthetic classes.", file=sys.stderr)
+
+        # Add a new column 'syn_{base_column}' using add_syn_city_column
+        try:
+            self.add_syn_class_column(
+                base_column=base_column,
+                new_column_name=new_syn_column_name,
+                max_uniques=max_uniques,
+                verbose=verbose
+            )
+            if verbose:
+                print(f"syn_class_column: Successfully added '{new_syn_column_name}'.", file=sys.stderr)
+        except Exception as e:
+            print(f"syn_class_column: Error adding synthetic column: {e}", file=sys.stderr)
+            raise
+
+        # Replace the original base_column with the new 'syn_{base_column}'
+        try:
+            self.replace_column(base_column, new_syn_column_name)
+            if verbose:
+                print(f"syn_class_column: Successfully replaced '{base_column}' with '{new_syn_column_name}'.", file=sys.stderr)
+        except Exception as e:
+            print(f"syn_class_column: Error replacing column: {e}", file=sys.stderr)
+            raise
+
+        # Remove the column that was added with .add_syn_city_column.
+        try:
+            self.drop_column(new_syn_column_name)
+            if verbose:
+                print(f"syn_class_column: Successfully dropped temporary column '{new_syn_column_name}'.", file=sys.stderr)
+        except Exception as e:
+            print(f"syn_class_column: Error dropping temporary column '{new_syn_column_name}': {e}", file=sys.stderr)
+            raise
+
+        return self
+
