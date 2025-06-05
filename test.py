@@ -6,8 +6,13 @@ df = pandas.DataFrame({
   "persona": [ "Ángela Cortés", "Felix Padilla", "John Mendoza",
                "Sebastián Perdomo", "Alejandro Álvarez", "Enrique Caro",
                "Wilson Pérez", "Patricia Cifuentes", "Milton García", 
-               "Ángela Cortés", "Marco Mesa", "Dary Castrillón", ] })
+               "Ángela Cortés", "Marco Mesa", "Dary Castrillón", ],
+  "género": [ "F", "M", "M",
+              "X", "M", "M",
+              "M", "F", "M",
+              "F", "M", "F",], })
 ob = CS(df)
 ob.data.show()
-ob.add_syn_last_name_column("persona", "otro")
+ob.add_syn_class_column("género", "clase")
 ob.data.show()
+ob.class_equivalences.show()
