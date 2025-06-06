@@ -293,7 +293,7 @@ class CS:
         
 # Additional methods in accesory files
 from .columns import set_column_type, add_column, drop_column, replace_column, rename_column
-from .rows import add_data, remove_rows, filter_rows, sql, groupings
+from .rows import add_data, remove_rows, filter_rows, sql
 from .auxiliary import letters_for, random_code, generate_kb_code, generate_mb_code, get_file_size
 from .destroy import fast_overwrite, destroy
 from .ranges import add_integer_range_column, add_age_range_column, add_float_range_column
@@ -304,6 +304,7 @@ from .synthetic import add_syn_date_column, add_syn_city_column, add_syn_name_co
 from .synthetic import add_syn_first_name_column, add_syn_last_name_column, add_syn_class_column
 from .synthetic import syn_date_column, syn_city_column, syn_name_column
 from .synthetic import syn_first_name_column, syn_last_name_column, syn_class_column
+from .analize import groups
 
 CS.set_column_type = set_column_type
 CS.set_type = set_column_type
@@ -322,7 +323,6 @@ CS.filter_rows = filter_rows
 CS.filter = filter_rows
 CS.sql = sql
 CS.exec = sql
-CS.groupings = groupings
 CS.add_integer_range_column = add_integer_range_column
 CS.add_age_range_column = add_age_range_column
 CS.add_float_range_column = add_float_range_column
@@ -347,3 +347,4 @@ CS.add_syn_last_name_column = add_syn_last_name_column
 CS.syn_last_name_column = syn_last_name_column
 CS.add_syn_class_column = add_syn_class_column
 CS.syn_class_column = syn_class_column
+CS.groups = groups
