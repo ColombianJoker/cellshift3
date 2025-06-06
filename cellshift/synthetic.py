@@ -490,8 +490,13 @@ def add_syn_name_column(self,
         self: The CS object with the 'base_column' replaced by synthetic full name values.
     """
 
+    if base_column is not None:
+        valid_columns = [col.lower() for col in self.data.columns]
+        if base_column.lower() not in valid_columns:
+            raise ValueError(f"Base column '{base_column}' not found in the data.")
     if (new_column_name is None):
       if (isinstance(base_column, str)):
+          # Validate base_column if provided
           new_column_name = f"syn_{base_column}"
       else:
           raise ValueError("add_syn_name_column: no new_column_name given and base_column is not valid.")
@@ -636,6 +641,10 @@ def add_syn_first_name_column(self,
         self: The CS object with the 'base_column' replaced by synthetic first name values.
     """
 
+    if base_column is not None:
+        valid_columns = [col.lower() for col in self.data.columns]
+        if base_column.lower() not in valid_columns:
+            raise ValueError(f"Base column '{base_column}' not found in the data.")
     if (new_column_name is None):
       if (isinstance(base_column, str)):
           new_column_name = f"syn_{base_column}"
@@ -782,6 +791,10 @@ def add_syn_last_name_column(self,
         self: The CS object with the 'base_column' replaced by synthetic last name values.
     """
 
+    if base_column is not None:
+        valid_columns = [col.lower() for col in self.data.columns]
+        if base_column.lower() not in valid_columns:
+            raise ValueError(f"Base column '{base_column}' not found in the data.")
     if (new_column_name is None):
       if (isinstance(base_column, str)):
           new_column_name = f"syn_{base_column}"
@@ -927,6 +940,10 @@ def add_syn_class_column(self,
     Returns:
         self: The CS object with the 'base_column' replaced by synthetic class values.
     """
+    if base_column is not None:
+        valid_columns = [col.lower() for col in self.data.columns]
+        if base_column.lower() not in valid_columns:
+            raise ValueError(f"Base column '{base_column}' not found in the data.")
     if (new_column_name is None):
       if (isinstance(base_column, str)):
           new_column_name = f"syn_{base_column}"
