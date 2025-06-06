@@ -428,7 +428,11 @@ def sql(self,
 
 def groupings(self,
               base_column: Optional[Union[str, List[str]]] = None,
-              group_name_prefix: str = 'GROUP_',
+              name_prefix: str = 'GROUP_',
+              group_column_name: str = 'Group_Name',
+              count_column_name: str = 'Count',
+              limit: Optional[int] = None,
+              order_by: str = 'ASC',
               verbose: bool = False) -> duckdb.DuckDBPyRelation:
         """
         Performs a SQL GROUP BY operation on the specified base_column(s)
@@ -440,7 +444,12 @@ def groupings(self,
             base_column: The column(s) to group by. Can be a single column name (str)
                          or a list of column names (List[str]). If None, defaults
                          to all columns in the .data member.
-            group_name_prefix: The prefix for naming each group (e.g., 'GROUP_').
+            name_prefix: The prefix for naming each group (e.g., 'GROUP_').
+            group_column_name: The name of the groupings column (defaults to 'Group_Name')
+            count_column_name: The name of the counts column (defaults to 'Count')
+            limit: An optional integer to limit the number of rows in the result set.
+                   If None, no limit is applied.
+            order_by: How to sort the result set, defaults to 'ASC'
             verbose: if True, show debug messages
 
         Returns:
@@ -452,7 +461,7 @@ def groupings(self,
             GROUP_2    | 5
         """
         if self.data is None:
-            raise ValueError("No data loaded in the CS object. Cannot perform groupings.")
+            raise ValueError("groupings: No data loaded in the CS object. Cannot perform groupings.")
 
         # Determine columns to group by
         if base_column is None:
@@ -464,13 +473,14 @@ def groupings(self,
             group_by_columns = [f'"{col}"' for col in base_column]
         else:
             raise ValueError("base_column must be a string, a list of strings, or None.")
-
+        # Process ORDER BY
+        if order_by.upper() != "DESC":
+          order_by = "ASC"
+        if (order_by.upper() != "ASC") and (order_by.upper() != "DESC"):
+            raise ValueError(f"groupings: order_by must be one of 'ASC' or 'DESC' ({order_by=})")
         # Construct the GROUP BY clause
         group_by_clause = ", ".join(group_by_columns)
 
-        # SQL query to perform the grouping and counting
-        # We use a CTE (Common Table Expression) to count groups first,
-        # then assign row numbers to create group names, and finally select.
         group_query_sql = f"""
             WITH GroupedData AS (
                 SELECT
@@ -489,14 +499,18 @@ def groupings(self,
                     GroupedData
             )
             SELECT
-                '{group_name_prefix}' || rn AS Group_Name,
-                group_count AS Count
+                '{name_prefix}' || rn AS "{group_column_name}",
+                group_count AS "{count_column_name}"
             FROM
                 OrderedGroups
             ORDER BY
-                Count;
+                "{count_column_name}" {order_by.upper()}
         """
-
+        # Add LIMIT if needed
+        if limit and (isinstance(limit,int) and (limit>0)):
+            group_query_sql += f"    LIMIT {limit}"
+        # Add final ';' even not needed really
+        group_query_sql += ";"
         if verbose:
             print(f"Executing groupings SQL:\n{group_query_sql}", file=sys.stderr)
 
