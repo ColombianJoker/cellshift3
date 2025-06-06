@@ -483,28 +483,18 @@ def groupings(self,
 
         group_query_sql = f"""
             WITH GroupedData AS (
-                SELECT
-                    {group_by_clause},
-                    COUNT(*) AS group_count
-                FROM
-                    "{self._tablename}"
-                GROUP BY
-                    {group_by_clause}
+                SELECT {group_by_clause}, COUNT(*) AS group_count
+                FROM "{self._tablename}"
+                GROUP BY {group_by_clause}
             ),
             OrderedGroups AS (
-                SELECT
-                    *,
-                    ROW_NUMBER() OVER (ORDER BY group_count) AS rn
-                FROM
-                    GroupedData
+                SELECT *, ROW_NUMBER() OVER (ORDER BY group_count) AS rn
+                FROM GroupedData
             )
-            SELECT
-                '{name_prefix}' || rn AS "{group_column_name}",
-                group_count AS "{count_column_name}"
-            FROM
-                OrderedGroups
-            ORDER BY
-                "{count_column_name}" {order_by.upper()}
+            SELECT '{name_prefix}' || rn AS "{group_column_name}", 
+                   group_count AS "{count_column_name}"
+            FROM OrderedGroups
+            ORDER BY "{count_column_name}" {order_by.upper()}
         """
         # Add LIMIT if needed
         if limit and (isinstance(limit,int) and (limit>0)):
