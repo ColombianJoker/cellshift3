@@ -293,7 +293,7 @@ class CS:
         
 # Additional methods in accesory files
 from .columns import set_column_type, add_column, drop_column, replace_column, rename_column
-from .rows import add_data, remove_rows, filter_rows, sql
+from .rows import add_data, remove_rows, filter_rows, sql, groupings
 from .auxiliary import letters_for, random_code, generate_kb_code, generate_mb_code, get_file_size
 from .destroy import fast_overwrite, destroy
 from .ranges import add_integer_range_column, add_age_range_column, add_float_range_column
@@ -322,6 +322,7 @@ CS.filter_rows = filter_rows
 CS.filter = filter_rows
 CS.sql = sql
 CS.exec = sql
+CS.groupings = groupings
 CS.add_integer_range_column = add_integer_range_column
 CS.add_age_range_column = add_age_range_column
 CS.add_float_range_column = add_float_range_column

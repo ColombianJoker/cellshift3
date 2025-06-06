@@ -425,3 +425,84 @@ def sql(self,
             print(f"run_sql: An error occurred during SQL execution: {e}", file=sys.stderr)
         raise ValueError(f"Failed to execute SQL query: {e}")
     return self
+
+def groupings(self,
+              base_column: Optional[Union[str, List[str]]] = None,
+              group_name_prefix: str = 'GROUP_',
+              verbose: bool = False) -> duckdb.DuckDBPyRelation:
+        """
+        Performs a SQL GROUP BY operation on the specified base_column(s)
+        or all columns if no base_column is provided.
+        Orders the result by the count of items in each group and assigns
+        a unique 'group_name_prefix' to each group.
+
+        Args:
+            base_column: The column(s) to group by. Can be a single column name (str)
+                         or a list of column names (List[str]). If None, defaults
+                         to all columns in the .data member.
+            group_name_prefix: The prefix for naming each group (e.g., 'GROUP_').
+            verbose: if True, show debug messages
+
+        Returns:
+            A DuckDBPyRelation object with columns 'Group_Name' and 'Count'.
+            Example:
+            Group_Name | Count
+            -----------|------
+            GROUP_1    | 1
+            GROUP_2    | 5
+        """
+        if self.data is None:
+            raise ValueError("No data loaded in the CS object. Cannot perform groupings.")
+
+        # Determine columns to group by
+        if base_column is None:
+            # Get all column names from the current relation
+            group_by_columns = [f'"{col}"' for col in self.data.columns]
+        elif isinstance(base_column, str):
+            group_by_columns = [f'"{base_column}"']
+        elif isinstance(base_column, list) and all(isinstance(col, str) for col in base_column):
+            group_by_columns = [f'"{col}"' for col in base_column]
+        else:
+            raise ValueError("base_column must be a string, a list of strings, or None.")
+
+        # Construct the GROUP BY clause
+        group_by_clause = ", ".join(group_by_columns)
+
+        # SQL query to perform the grouping and counting
+        # We use a CTE (Common Table Expression) to count groups first,
+        # then assign row numbers to create group names, and finally select.
+        group_query_sql = f"""
+            WITH GroupedData AS (
+                SELECT
+                    {group_by_clause},
+                    COUNT(*) AS group_count
+                FROM
+                    "{self._tablename}"
+                GROUP BY
+                    {group_by_clause}
+            ),
+            OrderedGroups AS (
+                SELECT
+                    *,
+                    ROW_NUMBER() OVER (ORDER BY group_count) AS rn
+                FROM
+                    GroupedData
+            )
+            SELECT
+                '{group_name_prefix}' || rn AS Group_Name,
+                group_count AS Count
+            FROM
+                OrderedGroups
+            ORDER BY
+                Count;
+        """
+
+        if verbose:
+            print(f"Executing groupings SQL:\n{group_query_sql}", file=sys.stderr)
+
+        try:
+            result_relation = self.cx.sql(group_query_sql)
+            return result_relation
+        except duckdb.Error as e:
+            print(f"Error performing groupings: {e}", file=sys.stderr)
+            raise
