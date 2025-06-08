@@ -7,29 +7,17 @@ import uuid
 # import tempfile
 import sys
 from . import CS
+from . import table_name_generator
 
-# Assuming _table_name_gen is defined globally in your module,
-# perhaps as a generator to create unique temporary table names.
-def _generate_unique_table_name() -> Iterator[str]:
-    """Generator for unique table names."""
-    i = 0
-    while True:
-        yield f"temp_cs_table_{uuid.uuid4().hex}_{i}"
-        i += 1
+_table_name_gen = table_name_generator()
 
-_table_name_gen = _generate_unique_table_name()
-
-
-# --- Re-adapted _mask_bigint_val_for_duckdb for DuckDB UDF registration ---
-def _mask_bigint_val_for_duckdb(
-    value: int,
+def _mask_value_for_duckdb(value: Union[int, str],
     mask_left_count: int,
     mask_right_count: int,
-    mask_char_str: str
-) -> str:
+    mask_char_str: str) -> str:
     """
-    Internal helper for DuckDB UDF. Masks an integer value to a string.
-    Assumes inputs are valid based on DuckDB's type system and pre-checks.
+    Internal helper for DuckDB UDF. Masks an integer or string value to a string.
+    Handles numeric signs if applicable.
     """
     if not mask_char_str:
         mask_char_single = " "
@@ -37,12 +25,20 @@ def _mask_bigint_val_for_duckdb(
         mask_char_single = mask_char_str[0]
 
     original_str_value = str(value)
-    sign = 1
     processed_value_str = original_str_value
+    sign_prefix = ""
 
-    if original_str_value.startswith("-"):
-        sign = -1
-        processed_value_str = original_str_value[1:]
+    # Adjust sign handling to be robust for both int and string inputs
+    if isinstance(value, int):
+        if value < 0:
+            sign_prefix = "-"
+            processed_value_str = original_str_value[1:]
+    elif isinstance(value, str):
+        # If it's a string that starts with '-' and the rest is digits, treat it as a negative number string
+        if original_str_value.startswith("-") and original_str_value[1:].isdigit():
+            sign_prefix = "-"
+            processed_value_str = original_str_value[1:]
+        # Otherwise, for general strings, no special sign handling; mask as is.
 
     current_length = len(processed_value_str)
 
@@ -53,26 +49,25 @@ def _mask_bigint_val_for_duckdb(
         masked_string_parts = [mask_char_single] * current_length
     else:
         masked_string_parts = list(processed_value_str)
+        # Mask left part
         for i in range(actual_mask_left):
             masked_string_parts[i] = mask_char_single
 
+        # Mask right part (from the original string's right end)
         for i in range(current_length - actual_mask_right, current_length):
             masked_string_parts[i] = mask_char_single
 
     final_masked_str = "".join(masked_string_parts)
 
-    if sign < 0:
-        final_masked_str = "-" + final_masked_str
+    return sign_prefix + final_masked_str
 
-    return final_masked_str
-
-def add_masked_column_bigint(self,
-    base_column: str,
-    new_column_name: Optional[str] = None,
-    mask_left: int = 0,
-    mask_right: int = 0,
-    mask_char: Union[str, int] = "×",
-    verbose: bool = False) -> CS:
+def add_masked_column(self,
+                      base_column: str,
+                      new_column_name: Optional[str] = None,
+                      mask_left: int = 0,
+                      mask_right: int = 0,
+                      mask_char: Union[str, int] = "×",
+                      verbose: bool = False) -> CS:
     """
     Adds a string column of masked values to the .data member (DuckDBPyRelation)
     by applying a mask to an INTEGER base_column.

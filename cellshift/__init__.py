@@ -6,13 +6,13 @@ import polars as pl
 import pyarrow as pa
 import sys
 import tempfile
-from typing import Any, List, Dict, Union, Optional, TYPE_CHECKING
+from typing import Any, List, Dict, Union, Optional, Iterator, TYPE_CHECKING
 
 # Define global variables for the table name generator
 _table_name_prefix = "table"
 _table_name_separator = "_"
 
-def table_name_generator() -> str:
+def table_name_generator() -> Iterator[str]:
     """Generator function to create unique table names."""
     seq = 0
     while True:
@@ -306,7 +306,7 @@ from .synthetic import add_syn_first_name_column, add_syn_last_name_column, add_
 from .synthetic import syn_date_column, syn_city_column, syn_name_column
 from .synthetic import syn_first_name_column, syn_last_name_column, syn_class_column
 from .analize import sql, groups
-from .masks import add_masked_column_bigint
+from .masks import add_masked_column
 
 CS.set_column_type = set_column_type
 CS.set_type = set_column_type
@@ -350,4 +350,4 @@ CS.syn_last_name_column = syn_last_name_column
 CS.add_syn_class_column = add_syn_class_column
 CS.syn_class_column = syn_class_column
 CS.groups = groups
-CS.add_masked_column_bigint = add_masked_column_bigint
+CS.add_masked_column_bigint = add_masked_column
