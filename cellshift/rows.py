@@ -164,7 +164,8 @@ def remove_rows(self,
         # Execute the query and fetch the result as an Arrow Table
         # new_data = self.cx.execute(filter_query_sql).fetch_arrow_table()
         new_data = self.cx.sql(delete_sql)
-        self.data = self.cx.table(self._tablename)
+        # self.data = self.cx.table(self._tablename)
+        self.data = new_data
 
         if verbose:
             print(f"{type(self.data)=}", file=sys.stderr)

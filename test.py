@@ -1,8 +1,14 @@
+
+import pandas
 from cellshift import CS
-csv_file = "persons_100_000.csv"
-d = CS(csv_file)
-d.drop_columns(["n", "direccion"]).data.limit(12).show()
-print(f"{d.data.shape=}\n")
-rset = d.sql("SELECT SUBSTR(nombre,1,1) AS Letra, COUNT(*) AS Cuantos FROM TABLE GROUP BY Letra ORDER BY Cuantos DESC",)
-d.data.limit(12).show()
-print(f"{d.data.shape=}\n")
+
+df = pandas.DataFrame({
+  "id":[10*(1000-i) for i in range(12)],
+  "names":[ "Armando", "Benito", "Carlos", "Daniel",
+            "Ernesto", "Felipe", "Gustavo", "Hernando",
+            "Ignacio", "Juan", "Karl", "Luis", ]
+})
+ob = CS(df)
+ob.data.show()
+ob.add_masked_column_bigint("id", mask_right=1)
+ob.data.show()

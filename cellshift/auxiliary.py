@@ -75,3 +75,90 @@ def get_file_size(filename: str) -> int:
   else:
     return 0
   
+from typing import Union, Any # Any might not be strictly needed, but useful for initial flexibility
+
+from typing import Union
+
+def mask_val(
+    value: Union[int, str],
+    mask_left: int = 0,
+    mask_right: int = 0,
+    mask_char: Union[str, int] = "0",
+    silent_fail: bool = False) -> str:
+    """
+    Return a string equivalent to the given value with the specified left and right
+    digits replaced by mask_char.
+
+    Args:
+        value (Union[int, str]): The value to mask. Can be an integer or a string.
+        mask_left (int): The number of left digits to mask. Must be non-negative.
+        mask_right (int): The number of right digits to mask. Must be non-negative.
+        mask_char (Union[str, int]): The character/digit to use for masking.
+                                      Only the first character is used if a string.
+        silent_fail (bool): If True, validation errors will return the original
+                            value as a string instead of raising a ValueError.
+
+    Returns:
+        str: The masked string, or the original value as a string if silent_fail is True
+             and a validation error occurs.
+    """
+    original_str_value = str(value) # Convert original value to string for fallback
+
+    # Type Conversion and Basic Validation for mask_char
+    processed_mask_char_single: str
+    if isinstance(mask_char, int):
+        processed_mask_char_single = str(mask_char)
+    elif isinstance(mask_char, str) and len(mask_char) > 0:
+        processed_mask_char_single = mask_char[0]
+    else:
+        if silent_fail:
+            return original_str_value
+        raise ValueError("mask_char must be a non-empty string or an integer.")
+
+    # Convert value to string and handle sign if integer
+    sign = 1
+    processed_value_str = original_str_value
+
+    if original_str_value.startswith("-"):
+        sign = -1
+        processed_value_str = original_str_value[1:] # Remove sign for internal processing
+
+    current_length = len(processed_value_str)
+
+    # Validate mask_left and mask_right
+    if not isinstance(mask_left, int) or mask_left < 0:
+        if silent_fail:
+            return original_str_value
+        raise ValueError("mask_left must be a non-negative integer.")
+    if not isinstance(mask_right, int) or mask_right < 0:
+        if silent_fail:
+            return original_str_value
+        raise ValueError("mask_right must be a non-negative integer.")
+
+    # Additional validation: Ensure mask_left and mask_right don't mask too much
+    if mask_left + mask_right > current_length:
+        if silent_fail:
+            return f"{mask_char}{original_str_value}{mask_char}"
+        raise ValueError(
+            f"Combined mask_left ({mask_left}) and mask_right ({mask_right}) "
+            f"exceed the effective length of the value ({current_length})."
+        )
+
+    # Apply Masking Logic
+    masked_string_parts = list(processed_value_str) # Convert to list to modify characters
+
+    # Mask left part
+    for i in range(mask_left):
+        masked_string_parts[i] = processed_mask_char_single
+
+    # Mask right part
+    for i in range(current_length - mask_right, current_length):
+        masked_string_parts[i] = processed_mask_char_single
+    
+    final_masked_str = "".join(masked_string_parts)
+
+    # Add back the sign if it was negative
+    if sign < 0:
+        final_masked_str = "-" + final_masked_str
+
+    return final_masked_str

@@ -295,6 +295,7 @@ class CS:
 from .columns import set_column_type, add_column, drop_column, replace_column, rename_column
 from .rows import add_data, remove_rows, filter_rows
 from .auxiliary import letters_for, random_code, generate_kb_code, generate_mb_code, get_file_size
+from .auxiliary import mask_val
 from .destroy import fast_overwrite, destroy
 from .ranges import add_integer_range_column, add_age_range_column, add_float_range_column
 from .ranges import integer_range_column, age_range_column, float_range_column
@@ -305,6 +306,7 @@ from .synthetic import add_syn_first_name_column, add_syn_last_name_column, add_
 from .synthetic import syn_date_column, syn_city_column, syn_name_column
 from .synthetic import syn_first_name_column, syn_last_name_column, syn_class_column
 from .analize import sql, groups
+from .masks import add_masked_column_bigint
 
 CS.set_column_type = set_column_type
 CS.set_type = set_column_type
@@ -348,3 +350,4 @@ CS.syn_last_name_column = syn_last_name_column
 CS.add_syn_class_column = add_syn_class_column
 CS.syn_class_column = syn_class_column
 CS.groups = groups
+CS.add_masked_column_bigint = add_masked_column_bigint

@@ -1,5 +1,6 @@
 import duckdb
 from duckdb import DuckDBPyConnection
+import sys
 from typing import Any, List, Dict, Union, Optional, TYPE_CHECKING
 from . import CS  # Import CS from the main module to be able to return self with typing
 
@@ -127,10 +128,10 @@ def groups(self,
            group_column_name: str = 'Group_Name',
            count_column_name: str = 'Count',
            group_data_column_name: str = 'Group_Data',
-           limit: Optional[int] = None,
            order_by: str = 'ASC',
            count_filter: str = '? > 0',
            meta: str = '?',
+           limit: Optional[int] = None,
            verbose: bool = False) -> duckdb.DuckDBPyRelation:
     """
     Creates a DuckDB table relation by grouping data based on the specified columns.
@@ -143,13 +144,13 @@ def groups(self,
         count_column_name : Name of the column for the count of each group.
         group_data_column_name : Name of the column for the list of group data, copied from source
                                  This is (the grouping key).
-        limit: Limits the number of groups returned.
         order_by : Order of the groups ('ASC' or 'DESC') based on count_column_name.
         count_filter: A SQL condition string to filter groups by their count.
                       The 'meta' character (default '?') will be replaced by the count_column_name.
                       Defaults to '? > 0'.
         meta: The placeholder character in 'count_filter' that will be replaced by the actual count column name.
               Defaults to '?'.
+        limit: Limits the number of groups returned.
         verbose: If True, shows debug info.
 
     Returns:
@@ -219,7 +220,7 @@ def groups(self,
 
     # Add ORDER BY clause for the final result set
     # The order_by now explicitly refers to the final 'Count' column name.
-    sql_query += f' ORDER BY "{count_column_name}" {order_by_upper}'
+    sql_query += f" ORDER BY \"{count_column_name}\", CAST(SUBSTR(\"{group_column_name}\",LENGTH('{name_prefix}')+1) AS INTEGER) {order_by_upper}"
 
     # Add LIMIT clause if provided
     if limit is not None:
