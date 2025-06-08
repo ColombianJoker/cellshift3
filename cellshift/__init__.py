@@ -350,4 +350,4 @@ CS.syn_last_name_column = syn_last_name_column
 CS.add_syn_class_column = add_syn_class_column
 CS.syn_class_column = syn_class_column
 CS.groups = groups
-CS.add_masked_column_bigint = add_masked_column
+CS.add_masked_column = add_masked_column

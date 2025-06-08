@@ -10,5 +10,6 @@ df = pandas.DataFrame({
 })
 ob = CS(df)
 ob.data.show()
-ob.add_masked_column_bigint("id", mask_right=1)
-ob.data.show()
+ob.remove_rows("names", condition="?=='Armando'")
+ob.add_masked_column("id", "masked_1", mask_right=1).data.show()
+ob.add_masked_column("masked_1", "masked_2", mask_left=1, mask_char='?').data.show()

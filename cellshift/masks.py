@@ -12,9 +12,9 @@ from . import table_name_generator
 _table_name_gen = table_name_generator()
 
 def _mask_value_for_duckdb(value: Union[int, str],
-    mask_left_count: int,
-    mask_right_count: int,
-    mask_char_str: str) -> str:
+                           mask_left_count: int,
+                           mask_right_count: int,
+                           mask_char_str: str) -> str:
     """
     Internal helper for DuckDB UDF. Masks an integer or string value to a string.
     Handles numeric signs if applicable.
@@ -60,7 +60,7 @@ def _mask_value_for_duckdb(value: Union[int, str],
     final_masked_str = "".join(masked_string_parts)
 
     return sign_prefix + final_masked_str
-
+    
 def add_masked_column(self,
                       base_column: str,
                       new_column_name: Optional[str] = None,
@@ -70,38 +70,38 @@ def add_masked_column(self,
                       verbose: bool = False) -> CS:
     """
     Adds a string column of masked values to the .data member (DuckDBPyRelation)
-    by applying a mask to an INTEGER base_column.
+    by applying a mask to an INTEGER or VARCHAR base_column.
 
     The `mask_left` leftmost characters and `mask_right` rightmost characters of
-    the INTEGER `base_column` are replaced by `mask_char`.
+    the `base_column` are replaced by `mask_char`.
     The function uses only the first character of `mask_char`.
 
     Args:
-        base_column (str): The name of the existing INTEGER column to mask.
+        base_column (str): The name of the existing INTEGER or VARCHAR column to mask.
         new_column_name (str, optional): The name for the new masked VARCHAR column.
                                          Defaults to "masked_{base_column}".
-        mask_left (int): The number of left digits to mask. Must be non-negative.
-        mask_right (int): The number of right digits to mask. Must be non-negative.
+        mask_left (int): The number of left digits/characters to mask. Must be non-negative.
+        mask_right (int): The number of right digits/characters to mask. Must be non-negative.
         mask_char (Union[str, int]): The character/digit to use for masking.
-        verbose (bool): If True, will show debug messages
+        verbose (bool): If True, will show debug messages.
 
     Returns:
         CS: The instance of the CS class, allowing for method chaining.
 
     Raises:
-        ValueError: If input arguments are invalid or if base_column is not INTEGER.
+        ValueError: If input arguments are invalid or if base_column is not INTEGER or VARCHAR.
     """
 
     # Determine new_column_name
     if new_column_name is None:
         new_column_name = f"masked_{base_column}"
     elif not isinstance(new_column_name, str) or not new_column_name:
-         raise ValueError(f"add_masked_column_bigint: new_column_name must be a non-empty string or None.")
+        raise ValueError(f"add_masked_column: new_column_name must be a non-empty string or None.")
 
     # Validate base_column
     if not isinstance(base_column, str) or not base_column:
-        raise ValueError(f"add_masked_column_bigint: base_column must be a non-empty string.")
-   
+        raise ValueError(f"add_masked_column: base_column must be a non-empty string.")
+
     # Process mask_char for consistency and validation
     processed_mask_char: str
     if isinstance(mask_char, int):
@@ -109,34 +109,17 @@ def add_masked_column(self,
     elif isinstance(mask_char, str) and len(mask_char) > 0:
         processed_mask_char = mask_char[0]
     else:
-        raise ValueError(f"add_masked_column_bigint: mask_char must be a non-empty string or an integer.")
+        raise ValueError(f"add_masked_column: mask_char must be a non-empty string or an integer.")
 
     # Validate mask_left and mask_right (Python-side validation)
     if not isinstance(mask_left, int) or mask_left < 0:
-        raise ValueError(f"add_masked_column_bigint: mask_left must be a non-negative integer.")
+        raise ValueError(f"add_masked_column: mask_left must be a non-negative integer.")
     if not isinstance(mask_right, int) or mask_right < 0:
-        raise ValueError(f"add_masked_column_bigint: mask_right must be a non-negative integer.")
+        raise ValueError(f"add_masked_column: mask_right must be a non-negative integer.")
 
     # Ensure self.data is not None before accessing .columns
     if self.data is None:
-        raise ValueError(f"add_masked_column_bigint: Data has not been loaded into self.data yet. Cannot process columns.")
-
-    # Register the UDF if not already registered
-    fn_name_in_duckdb = 'mask_BIGINT_val'
-    get_fn_query = f"SELECT COUNT(*) FROM duckdb_functions() WHERE function_name='{fn_name_in_duckdb}'"
-    if verbose:
-        print(f"add_masked_column_bigint: {get_fn_query=}", file=sys.stderr)
-    int_fn_count = self.cx.execute(get_fn_query).fetchall()[0][0]
-
-    if int_fn_count == 0:
-        self.cx.create_function(
-            fn_name_in_duckdb,
-            _mask_bigint_val_for_duckdb,
-            [BIGINT, INTEGER, INTEGER, VARCHAR],
-            VARCHAR
-        )
-    if verbose:
-        print(f"add_masked_column_bigint: UDF {fn_name_in_duckdb=} created.", file=sys.stderr)
+        raise ValueError(f"add_masked_column: Data has not been loaded into self.data yet. Cannot process columns.")
 
     # Get actual column names from the relation, converted to lowercase for case-insensitive comparison
     data_column_names_lower = [col.lower() for col in self.data.columns]
@@ -144,25 +127,62 @@ def add_masked_column(self,
     if base_column.lower() not in data_column_names_lower:
         raise ValueError(f"Column '{base_column}' not found in the table.")
 
-    # Now, get the data type. Since we know the column exists, we can query its type.
-    # We use base_column directly in the SQL query as DuckDB handles case-insensitivity for unquoted identifiers.
+    # Get the data type of the base_column
     column_type_query = f"""
         SELECT data_type
         FROM duckdb_columns()
         WHERE table_name = '{self._tablename}' AND column_name = '{base_column}'
     """
     if verbose:
-        print(f"add_masked_column_bigint: {column_type_query=}", file=sys.stderr)
+        print(f"add_masked_column: {column_type_query=}", file=sys.stderr)
     result = self.cx.execute(column_type_query).fetchall()
 
-    # # This `if not result:` should theoretically not be hit if the `base_column.lower()` check passed,
-    # # but it serves as a robustness check.
-    # if not result:
-    #      raise ValueError(f"add_masked_column_bigint: Could not retrieve type for column '{base_column}'. This indicates an unexpected state.")
+    if not result:
+         raise ValueError(f"add_masked_column: Could not retrieve type for column '{base_column}'. This indicates an unexpected state.")
 
-    column_data_type = result[0][0]
-    if "INT" not in column_data_type.upper(): # Check for any INT type (BIGINT, INTEGER, SMALLINT etc.)
-        raise ValueError(f"Column '{base_column}' is not of INTEGER type. It is '{column_data_type}'.")
+    column_data_type = result[0][0].upper() # Convert to uppercase for consistent comparison
+
+    # --- Determine UDF name and type flag based on column_data_type ---
+    int_version_fn = False
+    fn_name_in_duckdb: str
+
+    if "INT" in column_data_type: # matches BIGINT, INTEGER, SMALLINT etc.
+        fn_name_in_duckdb = 'mask_int_val'
+        int_version_fn = True
+    elif column_data_type in ("CHAR", "VARCHAR", "STRING"): # Also includes CHAR
+        fn_name_in_duckdb = 'mask_char_val'
+        int_version_fn = False # Explicitly set to False for char/varchar/string
+    else:
+        raise ValueError(f"Column '{base_column}' is not of an allowed type (INTEGER or VARCHAR/CHAR/STRING). It is '{column_data_type}'.")
+
+    # --- Register the appropriate UDF if not already registered ---
+    get_fn_query = f"SELECT COUNT(*) FROM duckdb_functions() WHERE function_name='{fn_name_in_duckdb}'"
+    if verbose:
+        print(f"add_masked_column: {get_fn_query=}", file=sys.stderr)
+    fn_count = self.cx.execute(get_fn_query).fetchall()[0][0]
+
+    if fn_count == 0:
+        if int_version_fn:
+            self.cx.create_function(
+                fn_name_in_duckdb,
+                _mask_value_for_duckdb, # Use the generic Python function
+                [BIGINT, INTEGER, INTEGER, VARCHAR], # DuckDB expects BIGINT if the column is an integer type
+                VARCHAR
+            )
+            if verbose:
+                print(f"add_masked_column: UDF {fn_name_in_duckdb=} (INT version) created.", file=sys.stderr)
+        else: # not int_version_fn, meaning it's a CHAR/VARCHAR/STRING type
+            self.cx.create_function(
+                fn_name_in_duckdb,
+                _mask_value_for_duckdb, # Use the generic Python function
+                [VARCHAR, INTEGER, INTEGER, VARCHAR], # DuckDB expects VARCHAR for string types
+                VARCHAR
+            )
+            if verbose:
+                print(f"add_masked_column: UDF {fn_name_in_duckdb=} (CHAR version) created.", file=sys.stderr)
+    else:
+        if verbose:
+            print(f"add_masked_column: UDF {fn_name_in_duckdb=} already registered.", file=sys.stderr)
 
     # Add the new masked column and update the self.data member
     existing_columns_query = f"""
@@ -171,19 +191,29 @@ def add_masked_column(self,
         WHERE table_name = '{self._tablename}'
     """
     if verbose:
-        print(f"add_masked_column_bigint: {existing_columns_query}", file=sys.stderr)
+        print(f"add_masked_column: {existing_columns_query}", file=sys.stderr)
     existing_columns = [row[0] for row in self.cx.execute(existing_columns_query).fetchall()]
-    
+
     select_columns_str = ", ".join(existing_columns)
     select_columns_str += f", {fn_name_in_duckdb}({base_column}, {mask_left}, {mask_right}, '{processed_mask_char}') AS {new_column_name}"
 
     # Update self.data to the new relation which includes the masked column
-    select_updated = f"SELECT {select_columns_str} FROM {self._tablename}"
+    # select_updated = f"SELECT {select_columns_str} FROM {self._tablename}"
+    alter_add_column = f"ALTER TABLE \"{self._tablename}\" ADD COLUMN \"{new_column_name}\" VARCHAR;"
     if verbose:
-        print(f"add_masked_column_bigint: {select_updated=}", file=sys.stderr)
-    self.data = self.cx.sql(select_updated)
-
-    # Re-register the view to reflect the updated self.data for subsequent operations
-    # self.data = self.cx.table(self._tablename)
+        print(f"{alter_add_column=}", file=sys.stderr)
+    self.cx.execute(alter_add_column)
+    update_new_column = f"""UPDATE \"{self._tablename}\"
+                            SET \"{new_column_name}\"={fn_name_in_duckdb}(\"{base_column}\", {mask_left}, {mask_right}, '{processed_mask_char}')
+                           """
+    if verbose:
+        print(f"{update_new_column=}", file=sys.stderr)
+    self.cx.execute(update_new_column)
+    self.data = self.cx.table(self._tablename)
+    # new_data = self.cx.sql(select_updated)
+    # self.data = self.cx.from_query(select_updated)
+    if verbose:
+        print(f"{self.data.columns=}", file=sys.stderr)
+        self.data.show()
 
     return self
