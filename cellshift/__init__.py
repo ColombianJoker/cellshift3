@@ -306,7 +306,7 @@ from .synthetic import add_syn_first_name_column, add_syn_last_name_column, add_
 from .synthetic import syn_date_column, syn_city_column, syn_name_column
 from .synthetic import syn_first_name_column, syn_last_name_column, syn_class_column
 from .analize import sql, groups
-from .masks import add_masked_column
+from .masks import add_masked_column, add_masked_mail_column
 
 CS.set_column_type = set_column_type
 CS.set_type = set_column_type
@@ -351,3 +351,4 @@ CS.add_syn_class_column = add_syn_class_column
 CS.syn_class_column = syn_class_column
 CS.groups = groups
 CS.add_masked_column = add_masked_column
+CS.add_masked_mail_column = add_masked_mail_column

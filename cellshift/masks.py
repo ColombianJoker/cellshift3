@@ -5,6 +5,7 @@ import pyarrow as pa
 from typing import Union, List, Optional, Iterator
 import uuid
 # import tempfile
+import secrets
 import sys
 from . import CS
 from . import table_name_generator
@@ -184,21 +185,7 @@ def add_masked_column(self,
         if verbose:
             print(f"add_masked_column: UDF {fn_name_in_duckdb=} already registered.", file=sys.stderr)
 
-    # Add the new masked column and update the self.data member
-    existing_columns_query = f"""
-        SELECT column_name
-        FROM duckdb_columns()
-        WHERE table_name = '{self._tablename}'
-    """
-    if verbose:
-        print(f"add_masked_column: {existing_columns_query}", file=sys.stderr)
-    existing_columns = [row[0] for row in self.cx.execute(existing_columns_query).fetchall()]
-
-    select_columns_str = ", ".join(existing_columns)
-    select_columns_str += f", {fn_name_in_duckdb}({base_column}, {mask_left}, {mask_right}, '{processed_mask_char}') AS {new_column_name}"
-
     # Update self.data to the new relation which includes the masked column
-    # select_updated = f"SELECT {select_columns_str} FROM {self._tablename}"
     alter_add_column = f"ALTER TABLE \"{self._tablename}\" ADD COLUMN \"{new_column_name}\" VARCHAR;"
     if verbose:
         print(f"{alter_add_column=}", file=sys.stderr)
@@ -210,10 +197,145 @@ def add_masked_column(self,
         print(f"{update_new_column=}", file=sys.stderr)
     self.cx.execute(update_new_column)
     self.data = self.cx.table(self._tablename)
-    # new_data = self.cx.sql(select_updated)
-    # self.data = self.cx.from_query(select_updated)
     if verbose:
         print(f"{self.data.columns=}", file=sys.stderr)
         self.data.show()
+
+    return self
+
+def add_masked_mail_column(self,
+                      base_column: str,
+                      new_column_name: Optional[str] = None,
+                      mask_user: Optional[Union[bool, str]] = False,
+                      mask_domain: Optional[Union[bool, str]] = False,
+                      domain_choices: Optional[Union[bool, str, List[str]]] = False,
+                      verbose: bool = False) -> CS:
+    """
+    Adds a string column of masked values to the .data member by replacing the user part of email
+        if chosen, replacing the domain part if chosen, and replacing from a list of domains if given
+
+    Args:
+        base_column (str): The name of the existing INTEGER or VARCHAR column to mask.
+        new_column_name (str, optional): The name for the new masked VARCHAR column.
+                                         Defaults to "masked_{base_column}".
+        mask_user (Optional[Union[bool, str]]): Or True (replaces with a default) or a string with
+                                                the replacement (for all values in base_column).
+                                                Defaults to None (don't replace).
+        mask_domain (Optional[Union[bool, str]]): Or True (replaces with something) or a string with
+                                                  the replacement (for all values in base_column).
+        domain_choices (Optional[Union[bool, str]]): True (replaces with something) or a list
+        verbose (bool): If True, will show debug messages.
+
+    Returns:
+        CS: The instance of the CS class, allowing for method chaining.
+
+    Raises:
+        ValueError: If input arguments are invalid or if base_column is not INTEGER or VARCHAR.
+    """
+
+    # Determine new_column_name
+    if new_column_name is None:
+        new_column_name = f"masked_{base_column}"
+    elif not isinstance(new_column_name, str) or not new_column_name:
+        raise ValueError(f"add_masked_column: new_column_name must be a non-empty string or None.")
+
+    # Validate base_column
+    if not isinstance(base_column, str) or not base_column:
+        raise ValueError(f"add_masked_column: base_column must be a non-empty string.")
+
+    # Validate mask_user
+    if not isinstance(mask_user, bool) and not isinstance(mask_user, str):
+        raise ValueError(f"add_masked_column: mask_user must be boolean or a string.")
+    # Validate mask_domain
+    if not isinstance(mask_domain, bool) and not isinstance(mask_domain, str):
+        raise ValueError(f"add_masked_column: mask_domain must be boolean or a string.")
+    # Validate domain_choices
+    if not isinstance(domain_choices, bool) and \
+      (not isinstance(domain_choices, str) and not isinstance(domain_choices, List)):
+        raise ValueError(f"add_masked_column: domain_choices must be boolean or a string or a list of strings.")
+    
+    # Ensure self.data is not None before accessing .columns
+    if self.data is None:
+        raise ValueError(f"add_masked_column: Data has not been loaded into self.data yet. Cannot process columns.")
+
+    # Get actual column names from the relation, converted to lowercase for case-insensitive comparison
+    data_column_names_lower = [col.lower() for col in self.data.columns]
+
+    if base_column.lower() not in data_column_names_lower:
+        raise ValueError(f"Column '{base_column}' not found in the table.")
+
+    # Get the data type of the base_column
+    column_type_query = f"""
+        SELECT data_type
+        FROM duckdb_columns()
+        WHERE table_name = '{self._tablename}' AND column_name = '{base_column}'
+    """
+    if verbose:
+        print(f"add_masked_column: {column_type_query=}", file=sys.stderr)
+    result = self.cx.execute(column_type_query).fetchall()
+
+    if not result:
+         raise ValueError(f"add_masked_column: Could not retrieve type for column '{base_column}'. This indicates an unexpected state.")
+
+    column_data_type = result[0][0].upper() # Convert to uppercase for consistent comparison
+
+    fn_name_in_duckdb: str
+
+    if column_data_type in ("CHAR", "VARCHAR", "STRING"): # Also includes CHAR
+        fn_name_in_duckdb = 'mask_char_val'
+    else:
+        raise ValueError(f"Column '{base_column}' is not of an allowed type (VARCHAR/CHAR/STRING). It is '{column_data_type}'.")
+
+    user_mask: str
+    domain_mask: str
+    resrc: str
+    remsk: str
+    
+    if mask_user: # Handle "mask_user was given"
+        if mask_user is True:
+          user_mask='????????'
+        else:
+          user_mask = mask_user
+    if mask_domain:
+        if mask_domain is True:
+            if not domain_choices:
+                domain_mask = secrets.choice([
+                  "example.com",
+                  "example.org",
+                  "example.net",
+                  "example.edu",
+                  "example.co",
+                ])
+            else:
+              domain_mask = secrets.choice(domain_choices)
+        else:
+            domain_mask = mask_domain
+    if mask_user and mask_domain:
+        resrc = "^([\w._-]+)@([\w._-]+)"
+        remsk = f"{user_mask}@{domain_mask}"
+    elif mask_user:
+        resrc="^([\w._-]+)@"
+        remsk=f"{user_mask}@"
+    elif mask_domain:
+        resrc="@([\w._-]+)"
+        remsk=f"@{domain_mask}"
+    if mask_user or mask_domain:
+      # Update self.data to the new relation which includes the masked column
+      alter_add_column: str = f"ALTER TABLE \"{self._tablename}\" ADD COLUMN \"{new_column_name}\" VARCHAR;"
+      if verbose:
+          print(f"{alter_add_column=}", file=sys.stderr)
+      self.cx.execute(alter_add_column)
+      update_new_column: str = f"""UPDATE \"{self._tablename}\"
+                              SET \"{new_column_name}\"=regexp_replace({base_column}, '{resrc}', '{remsk}');
+                             """
+      if verbose:
+          print(f"{update_new_column=}", file=sys.stderr)
+      self.cx.execute(update_new_column)
+      self.data = self.cx.table(self._tablename)
+      # new_data = self.cx.sql(select_updated)
+      # self.data = self.cx.from_query(select_updated)
+      if verbose:
+          print(f"{self.data.columns=}", file=sys.stderr)
+          self.data.show()
 
     return self
