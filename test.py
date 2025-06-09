@@ -17,4 +17,5 @@ ob.data.show()
 ob.add_masked_column("id", "masked_1", mask_right=1).data.show()
 ob.add_masked_column("masked_1", "masked_2", mask_left=1, mask_char='?').data.show()
 ob.add_masked_column("names", mask_left=2, mask_char='⌘').data.show()
-ob.add_masked_mail_column("mails", mask_domain=True, verbose=True)
+ob.add_masked_mail_column("mails", mask_domain=True, 
+  domain_choices=["a.org", "b.com", "c.net", "d.co"],).data.show()
