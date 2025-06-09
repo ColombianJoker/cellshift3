@@ -226,15 +226,16 @@ def add_masked_mail_column(self,
         new_column_name (str, optional): The name for the new masked VARCHAR column.
                                          Defaults to "masked_{base_column}".
         mask_user (Optional[Union[bool, str]]): Or True (replaces with a default) or a string with
-                                                 the replacement (for all values in base_column).
-                                                 Defaults to False (don't replace).
+                                                the replacement (for all values in base_column).
+                                                Defaults to False (don't replace).
         mask_domain (Optional[Union[bool, str]]): Or True (replaces with something) or a string with
-                                                   the replacement (for all values in base_column).
-                                                   Defaults to False (don't replace).
+                                                  the replacement (for all values in base_column).
+                                                  Defaults to False (don't replace).
         domain_choices (Optional[Union[bool, str, List[str]]]): True (replaces with something), a string
-                                                                 (replaces all domains with this string),
-                                                                 or a list of strings (replaces 1/n of eligible
-                                                                 rows for each choice in the list). Defaults to False.
+                                                                (replaces all domains with this string),
+                                                                or a list of strings (replaces 1/n of eligible
+                                                                rows for each choice in the list).
+                                                                Defaults to False.
         verbose (bool): If True, will show debug messages.
 
     Returns:
@@ -441,4 +442,84 @@ def add_masked_mail_column(self,
                     self.data.show()
 
     self.data = self.cx.table(self._tablename) # Final refresh
+    return self
+
+def mask_column(self,
+                      base_column: str,
+                      mask_left: int = 0,
+                      mask_right: int = 0,
+                      mask_char: Union[str, int] = "×",
+                      verbose: bool = False) -> CS:
+    """
+    Converts a column to a column of masked values by applying a mask to an INTEGER or VARCHAR base_column.
+
+    The `mask_left` leftmost characters and `mask_right` rightmost characters of
+    the `base_column` are replaced by `mask_char`.
+    The function uses only the first character of `mask_char`.
+
+    Args:
+        base_column (str): The name of the existing INTEGER or VARCHAR column to mask.
+        mask_left (int): The number of left digits/characters to mask. Must be non-negative.
+        mask_right (int): The number of right digits/characters to mask. Must be non-negative.
+        mask_char (Union[str, int]): The character/digit to use for masking.
+        verbose (bool): If True, will show debug messages.
+
+    Returns:
+        CS: The instance of the CS class, allowing for method chaining.
+
+    Raises:
+        ValueError: If input arguments are invalid or if base_column is not INTEGER or VARCHAR.
+    """
+    new_column_name: str = f"masked_{base_column}"                   
+    self.add_masked_column(base_column,
+                           new_column_name=new_column_name,
+                           mask_left=mask_left,
+                           mask_right=mask_right,
+                           mask_char=mask_char,
+                           verbose=verbose)
+    self.replace_column(base_column, new_column_name, verbose=verbose)
+    self.drop_column(new_column_name, verbose=verbose)
+    return self
+
+def mask_mail_column(self,
+                            base_column: str,
+                            mask_user: Optional[Union[bool, str]] = False,
+                            mask_domain: Optional[Union[bool, str]] = False,
+                            domain_choices: Optional[Union[bool, str, List[str]]] = False,
+                            verbose: bool = False) -> 'CS':
+    """
+    Converts a string column to a column of masked emails by replacing the user part of email
+    if chosen, replacing the domain part if chosen, and replacing from a list of domains if given.
+    When domain_choices is a list, it masks 1/n of the eligible unmasked rows for each choice.
+
+    Args:
+        base_column (str): The name of the existing INTEGER or VARCHAR column to mask.
+        mask_user (Optional[Union[bool, str]]): Or True (replaces with a default) or a string with
+                                                 the replacement (for all values in base_column).
+                                                 Defaults to False (don't replace).
+        mask_domain (Optional[Union[bool, str]]): Or True (replaces with something) or a string with
+                                                   the replacement (for all values in base_column).
+                                                   Defaults to False (don't replace).
+        domain_choices (Optional[Union[bool, str, List[str]]]): True (replaces with something), a string
+                                                                 (replaces all domains with this string),
+                                                                 or a list of strings (replaces 1/n of eligible
+                                                                 rows for each choice in the list).
+                                                                 Defaults to False.
+        verbose (bool): If True, will show debug messages.
+
+    Returns:
+        CS: The instance of the CS class, allowing for method chaining.
+
+    Raises:
+        ValueError: If input arguments are invalid or if base_column is not INTEGER or VARCHAR.
+    """
+    new_column_name: str = f"masked_{base_column}"                   
+    self.add_masked_mail_column(base_column,
+                                new_column_name=new_column_name,
+                                mask_user=mask_user,
+                                mask_domain=mask_domain,
+                                domain_choices=domain_choices,
+                                verbose=verbose)
+    self.replace_column(base_column, new_column_name, verbose=verbose)
+    self.drop_column(new_column_name, verbose=verbose)
     return self
