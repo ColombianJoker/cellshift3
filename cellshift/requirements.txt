@@ -2,5 +2,7 @@ duckdb
 pandas
 polars
 pyarrow
-secrets
+random
+tempfile
 tqdm
+typing

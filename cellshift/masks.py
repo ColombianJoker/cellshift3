@@ -3,7 +3,7 @@ from duckdb.typing import BIGINT, INTEGER, VARCHAR
 import polars as pl
 import pyarrow as pa
 from typing import Union, List, Optional, Iterator
-import uuid
+# import uuid
 # import tempfile
 # import secrets
 import random
