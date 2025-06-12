@@ -5,7 +5,8 @@ import pyarrow as pa
 from typing import Union, List, Optional, Iterator
 import uuid
 # import tempfile
-import secrets
+# import secrets
+import random
 import sys
 from . import CS
 from . import table_name_generator
@@ -310,7 +311,8 @@ def add_masked_mail_column(self,
         if mask_domain is True:
             # If domain_choices is not specified or is False, use default choices
             if not domain_choices: # domain_choices could be False, True, str, or List
-                domain_mask_str = secrets.choice([
+                # domain_mask_str = secrets.choice([
+                domain_mask_str = random.choice([
                     "example.com", "example.org", "example.net",
                     "example.edu", "example.co"
                 ])
@@ -320,7 +322,8 @@ def add_masked_mail_column(self,
                 # This case will be handled by the specific domain_choices loop later
                 domain_mask_str = None
             else: # domain_choices is True, but not a list or string, fall back to default
-                domain_mask_str = secrets.choice([
+                # domain_mask_str = secrets.choice([
+                domain_mask_str = random.choice([
                     "example.com", "example.org", "example.net",
                     "example.edu", "example.co"
                 ])
@@ -445,11 +448,11 @@ def add_masked_mail_column(self,
     return self
 
 def mask_column(self,
-                      base_column: str,
-                      mask_left: int = 0,
-                      mask_right: int = 0,
-                      mask_char: Union[str, int] = "×",
-                      verbose: bool = False) -> CS:
+                base_column: str,
+                mask_left: int = 0,
+                mask_right: int = 0,
+                mask_char: Union[str, int] = "×",
+                verbose: bool = False) -> CS:
     """
     Converts a column to a column of masked values by applying a mask to an INTEGER or VARCHAR base_column.
 
